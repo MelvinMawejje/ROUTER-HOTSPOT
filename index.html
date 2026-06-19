@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MBUYA WIFI – Connect</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="style.css" rel="stylesheet" />
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     PORTAL VIEW  (shown to unauthenticated visitors)
+     ══════════════════════════════════════════════════════════════════ -->
+<div id="portalView">
+<div class="portal-card">
+
+  <!-- Brand -->
+  <div class="mb-4">
+    <svg class="wifi-icon" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="26" r="26" fill="rgba(0,198,178,0.08)"/>
+      <path d="M10 22c8.8-8.8 23.2-8.8 32 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M15 27c5.5-5.5 16.5-5.5 22 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round" opacity=".8"/>
+      <path d="M20 32c2.8-2.8 9.2-2.8 12 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round" opacity=".6"/>
+      <circle cx="26" cy="38" r="2.5" fill="#00c6b2"/>
+    </svg>
+    <div class="brand-title">MBUYA <span>WIFI</span></div>
+    <div class="brand-sub">Fast &amp; Reliable Internet Access</div>
+  </div>
+
+  <!-- Voucher section -->
+  <div id="voucherSection">
+    <div class="section-label">🎟 Voucher Code</div>
+    <p style="color:var(--muted);font-size:0.82rem;margin-bottom:12px;">Enter your voucher code to connect instantly.</p>
+    <input type="text" id="voucherInput" class="form-control mb-3"
+      placeholder="e.g. MBUYA-XXXX-XXXX" maxlength="40" autocomplete="off"
+      style="letter-spacing:0.08em;"
+      onkeydown="if(event.key==='Enter') submitVoucher()"/>
+    <button class="btn-teal" onclick="submitVoucher()">Connect with Voucher</button>
+  </div>
+
+  <div class="section-divider">or pay via mobile money</div>
+
+  <!-- Mobile money section -->
+  <div class="section-label">📱 Buy a Data Package</div>
+  <p style="color:var(--muted);font-size:0.82rem;margin-bottom:14px;">Select a package and pay via MTN / Airtel Mobile Money.</p>
+
+  <div class="pkg-grid">
+    <div class="pkg-card" data-pkg="1day" data-price="1,000" onclick="selectPkg(this)">
+      <div class="pkg-duration">1 Day</div>
+      <div class="pkg-price"><span class="currency">UGX </span>1,000</div>
+    </div>
+    <div class="pkg-card" data-pkg="1week" data-price="5,000" onclick="selectPkg(this)">
+      <div class="pkg-duration">1 Week</div>
+      <div class="pkg-price"><span class="currency">UGX </span>5,000</div>
+    </div>
+    <div class="pkg-card" data-pkg="1month" data-price="20,000" onclick="selectPkg(this)">
+      <div class="pkg-duration">1 Month</div>
+      <div class="pkg-price"><span class="currency">UGX </span>20,000</div>
+    </div>
+  </div>
+
+  <div id="pkgSummary" style="display:none;background:rgba(0,198,178,0.07);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;color:var(--white);">
+    Selected: <strong id="pkgSummaryText" style="color:var(--teal);"></strong>
+  </div>
+
+  <div class="section-label mt-1">Phone Number</div>
+  <input type="tel" id="phoneInput" class="form-control mb-3"
+    placeholder="07XX XXX XXX" maxlength="10" inputmode="numeric" pattern="[0-9]{10}"/>
+
+  <button class="btn-teal" onclick="submitMobileMoney()">Pay &amp; Connect</button>
+
+  <div class="portal-footer mt-3">Powered by MBUYA WIFI &nbsp;·&nbsp; Support: 0703 817 517</div>
+</div>
+</div><!-- /portalView -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════
+     DASHBOARD VIEW  (shown after successful login)
+     ══════════════════════════════════════════════════════════════════ -->
+<div id="dashboardView" style="display:none;">
+<div class="portal-card dash-card">
+
+  <!-- Brand (compact) -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+    <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:36px;height:36px;flex-shrink:0;">
+      <circle cx="26" cy="26" r="26" fill="rgba(0,198,178,0.08)"/>
+      <path d="M10 22c8.8-8.8 23.2-8.8 32 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M15 27c5.5-5.5 16.5-5.5 22 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round" opacity=".8"/>
+      <path d="M20 32c2.8-2.8 9.2-2.8 12 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round" opacity=".6"/>
+      <circle cx="26" cy="38" r="2.5" fill="#00c6b2"/>
+    </svg>
+    <div>
+      <div class="brand-title" style="font-size:1.5rem;text-align:left;">MBUYA <span>WIFI</span></div>
+      <div id="dashStatus" style="font-size:0.78rem;color:var(--teal);letter-spacing:0.06em;">🟢 Connected</div>
+    </div>
+  </div>
+
+  <!-- Voucher badge -->
+  <div class="dash-voucher-box">
+    <div style="font-size:0.7rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">Your Voucher</div>
+    <div id="dashUser" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.15rem;color:var(--teal);letter-spacing:0.06em;word-break:break-all;"></div>
+  </div>
+
+  <!-- Stats grid -->
+  <div class="dash-stats">
+    <div class="dash-stat">
+      <div class="dash-stat-icon">⏱</div>
+      <div class="dash-stat-label">Connected For</div>
+      <div class="dash-stat-value" id="dashUptime">…</div>
+    </div>
+    <div class="dash-stat">
+      <div class="dash-stat-icon">⏳</div>
+      <div class="dash-stat-label">Time Remaining</div>
+      <div class="dash-stat-value" id="dashRemaining">…</div>
+    </div>
+  </div>
+
+  <!-- Session ended notice (hidden until session expires) -->
+  <div id="dashExpiredMsg" style="display:none;background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;color:#ff6b6b;text-align:center;">
+    Your session has ended. Purchase a new voucher to reconnect.
+    <br><br>
+    <a href="/" style="color:var(--teal);font-weight:600;">← Back to Portal</a>
+  </div>
+
+  <!-- Logout -->
+  <button id="dashLogoutBtn" class="btn-danger" onclick="logoutSession()">Disconnect</button>
+
+  <div class="portal-footer mt-3">MBUYA WIFI &nbsp;·&nbsp; Support: 0703 817 517</div>
+</div>
+</div><!-- /dashboardView -->
+
+
+<!-- Toast -->
+<div class="success-toast" id="toast"></div>
+
+<!-- Waiting modal -->
+<div id="waitingModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-icon">📲</div>
+    <div class="modal-title">Check Your Phone</div>
+    <p class="modal-body">A Mobile Money PIN prompt has been sent to<br>
+      <strong id="modalPhone" style="color:var(--teal);"></strong></p>
+    <div class="modal-amount-badge">Amount: <strong id="modalPrice" style="color:var(--teal);"></strong></div>
+    <p style="color:var(--muted);font-size:0.78rem;margin-bottom:16px;"><span id="modalStatus">Waiting for PIN entry…</span></p>
+    <div class="loader-bar"><div class="loader-fill"></div></div>
+  </div>
+</div>
+
+<!-- Success modal -->
+<div id="successModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-icon">✅</div>
+    <div class="modal-title" style="color:var(--teal);">Thank You!</div>
+    <p class="modal-body">Payment confirmed. You are now connected to<br><strong style="color:var(--white);">MBUYA WIFI</strong> 🎉</p>
+    <button class="btn-teal" onclick="closeSuccessModal()">Done</button>
+  </div>
+</div>
+
+<!-- Error modal -->
+<div id="errorModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-icon">❌</div>
+    <div class="modal-title" style="color:#ff6b6b;">Connection Failed</div>
+    <p class="modal-body" id="errorMsg">Something went wrong. Please try again.</p>
+    <button class="btn-teal" style="background:#ff6b6b;" onclick="closeErrorModal()">Try Again</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
