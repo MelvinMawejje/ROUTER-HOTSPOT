@@ -225,25 +225,19 @@ function renderTable(rows) {
   }
 
   tbody.innerHTML = rows.map(v => {
-    const pct  = v.allocated_seconds > 0 ? v.used_seconds / v.allocated_seconds : 0;
-    const pctP = Math.min(100, Math.round(pct * 100));
     const rem  = fmtSec(v.remaining_seconds);
-    const tot  = fmtSec(v.allocated_seconds);
     const profileLabel = { '1day':'1 Day','1week':'1 Week','1month':'1 Month' }[v.profile] || v.profile;
 
-    let badge, fillColor;
-    if (v.disabled)                            { badge = '<span class="badge badge-used">Disabled</span>'; fillColor='#ff6b6b'; }
-    else if (v.remaining_seconds <= 0)         { badge = '<span class="badge badge-used">Expired</span>';  fillColor='#ff6b6b'; }
-    else if (v.used_seconds === 0)             { badge = '<span class="badge badge-unused">Unused</span>'; fillColor='var(--teal)'; }
-    else                                       { badge = '<span class="badge badge-partial">Partial</span>'; fillColor='#ffc800'; }
+    let badge;
+    if (v.disabled)                        badge = '<span class="badge badge-used">Disabled</span>';
+    else if (v.remaining_seconds <= 0)     badge = '<span class="badge badge-used">Expired</span>';
+    else if (v.used_seconds === 0)         badge = '<span class="badge badge-unused">Unused</span>';
+    else                                   badge = '<span class="badge badge-partial">Partial</span>';
 
     return `<tr>
       <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${v.code}</td>
       <td>${profileLabel}</td>
-      <td>
-        <div style="font-size:.75rem;color:var(--muted)">${fmtSec(v.used_seconds)} used of ${tot}</div>
-        <div class="progress"><div class="progress-fill" style="width:${pctP}%;background:${fillColor}"></div></div>
-      </td>
+      <td style="font-size:.78rem;color:var(--muted)">${rem} remaining</td>
       <td>${badge}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm btn-outline" onclick="copyCode('${v.code}')" title="Copy">📋</button>

@@ -137,21 +137,24 @@ app.post('/api/pay', async (req, res) => {
 });
 
 // ─── Auto‑connect after payment ──────────────────────────────────────────────
+// NOTE: We intentionally do NOT create a local MikroTik hotspot user here.
+// If a local user exists, MikroTik authenticates it locally and never sends
+// RADIUS accounting — so expires_at never gets set and the wall-clock timer
+// never starts. Keeping the voucher in RADIUS only (our db) forces MikroTik
+// to go through RADIUS for auth AND accounting, which is what we want.
 app.post('/api/pay/connect', async (req, res) => {
   const { phone, packageId } = req.body;
   if (!phone || !packageId)
     return res.status(400).json({ success: false, message: 'Missing phone or package ID.' });
 
   try {
-    const voucherCode = `PAY-${Date.now()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
+    // Generate PAY + 8 alphanumeric chars, no hyphens (e.g. PAY3F7K9XZ)
+    // Same charset as admin vouchers — no ambiguous chars (0/O/1/I/L)
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let voucherCode = 'PAY';
+    for (let i = 0; i < 8; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
 
-    // 1. Create hotspot user in MikroTik (PUT = create record via REST API)
-    await mikrotikFetch('/ip/hotspot/user', {
-      method: 'PUT',
-      body: JSON.stringify({ name: voucherCode, password: '', profile: packageId, disabled: 'false' }),
-    });
-
-    // 2. Register in our database so RADIUS can track cumulative session time
+    // Register in our database — RADIUS handles authentication from here
     db.createVoucher(voucherCode, packageId);
 
     res.json({
@@ -264,16 +267,15 @@ app.get('/api/session/info', async (req, res) => {
   if (!user) return res.status(400).json({ error: 'Missing user' });
 
   try {
-    const active  = await mikrotikFetch('/ip/hotspot/active');
+    const active = await mikrotikFetch('/ip/hotspot/active');
     const session = active.find(s => s.user === user);
     if (session) {
-      const voucher   = db.getVoucher(user);
+      const voucher = db.getVoucher(user);
       const remaining = voucher ? voucher.remaining_seconds : 0;
       return res.json({
-        active:    true,
-        uptime:    session.uptime || '0s',
+        active: true,
+        uptime: session.uptime || '0s',
         remaining: secondsToDuration(remaining),
-        expiresAt: voucher && voucher.expires_at ? voucher.expires_at : null,
       });
     } else {
       return res.json({ active: false });
@@ -291,7 +293,6 @@ app.post('/api/session/logout', async (req, res) => {
     const active  = await mikrotikFetch('/ip/hotspot/active');
     const session = active.find(s => s.user === user);
     if (session && session['.id']) {
-      // Use /remove command — avoids the encodeURIComponent/* issue with DELETE
       await mikrotikFetch('/ip/hotspot/active/remove', {
         method: 'POST',
         body:   JSON.stringify({ '.id': session['.id'] }),
@@ -312,7 +313,6 @@ app.post('/api/admin/vouchers/disable', async (req, res) => {
   const adminDb  = new Database(path.join(__dirname, 'mbuya.db'));
   adminDb.prepare('UPDATE vouchers SET disabled = 1 WHERE code = ?').run(code);
 
-  // Also remove from MikroTik active sessions
   try {
     const active  = await mikrotikFetch('/ip/hotspot/active');
     const session = active.find(s => s.user === code);
