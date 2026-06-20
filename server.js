@@ -245,6 +245,65 @@ app.post('/api/admin/vouchers/generate', (req, res) => {
   res.json({ success: true, count: generated.length, codes: generated });
 });
 
+//______________________seek voucher login code____________________________
+function secondsToDuration(seconds) {
+  if (!seconds || seconds <= 0) return '0s';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  let parts = [];
+  if (d) parts.push(d + 'd');
+  if (h) parts.push(h + 'h');
+  if (m) parts.push(m + 'm');
+  if (s) parts.push(s + 's');
+  return parts.join('') || '0s';
+}
+app.get('/api/session/info', async (req, res) => {
+  const user = req.query.user;
+  if (!user) return res.status(400).json({ error: 'Missing user' });
+
+  try {
+    const active  = await mikrotikFetch('/ip/hotspot/active');
+    const session = active.find(s => s.user === user);
+    if (session) {
+      const voucher   = db.getVoucher(user);
+      const remaining = voucher ? voucher.remaining_seconds : 0;
+      return res.json({
+        active:    true,
+        uptime:    session.uptime || '0s',
+        remaining: secondsToDuration(remaining),
+        expiresAt: voucher && voucher.expires_at ? voucher.expires_at : null,
+      });
+    } else {
+      return res.json({ active: false });
+    }
+  } catch (err) {
+    console.error('Session info error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/session/logout', async (req, res) => {
+  const { user } = req.body;
+  if (!user) return res.status(400).json({ error: 'Missing user' });
+
+  try {
+    const active  = await mikrotikFetch('/ip/hotspot/active');
+    const session = active.find(s => s.user === user);
+    if (session && session['.id']) {
+      // Use /remove command — avoids the encodeURIComponent/* issue with DELETE
+      await mikrotikFetch('/ip/hotspot/active/remove', {
+        method: 'POST',
+        body:   JSON.stringify({ '.id': session['.id'] }),
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Logout error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Disable a voucher (kicks active session too) ──────────────────────────────
 app.post('/api/admin/vouchers/disable', async (req, res) => {
   const { code } = req.body;
@@ -257,7 +316,12 @@ app.post('/api/admin/vouchers/disable', async (req, res) => {
   try {
     const active  = await mikrotikFetch('/ip/hotspot/active');
     const session = active.find(s => s.user === code);
-    if (session) await mikrotikFetch(`/ip/hotspot/active/${encodeURIComponent(session['.id'])}`, { method: 'DELETE' });
+    if (session) {
+      await mikrotikFetch('/ip/hotspot/active/remove', {
+        method: 'POST',
+        body:   JSON.stringify({ '.id': session['.id'] }),
+      });
+    }
   } catch (e) { /* non-fatal */ }
 
   res.json({ success: true });
