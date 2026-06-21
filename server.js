@@ -63,8 +63,17 @@ app.post('/api/voucher/redeem', (req, res) => {
   if (voucher.remaining_seconds <= 0)
     return res.status(400).json({ success: false, message: 'This voucher has expired — all session time has been used.' });
 
-  // Valid — return the MikroTik hotspot login action.
-  // The browser POSTs directly to MikroTik; RADIUS supplies the Session-Timeout.
+  // Record revenue on first use — wrapped in try/catch so a DB hiccup
+  // never prevents the user from logging in
+  if (!voucher.first_used_at) {
+    try {
+      const source = code.startsWith('PAY') ? 'mobile_money' : 'voucher';
+      db.recordRevenue(code, voucher.profile, source);
+    } catch (e) {
+      console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
+    }
+  }
+
   res.json({
     success:     true,
     code,
@@ -156,6 +165,13 @@ app.post('/api/pay/connect', async (req, res) => {
 
     // Register in our database — RADIUS handles authentication from here
     db.createVoucher(voucherCode, packageId);
+
+    // Record revenue (96% net for mobile money) — non-fatal if DB not ready
+    try {
+      db.recordRevenue(voucherCode, packageId, 'mobile_money');
+    } catch (e) {
+      console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
+    }
 
     res.json({
       success:     true,
@@ -335,4 +351,31 @@ app.get('/api/admin/sessions', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+// ── Metrics endpoint ──────────────────────────────────────────────────────────
+const METRICS_PIN = '1234'; // Change this to your preferred PIN
+
+app.get('/api/admin/metrics', (req, res) => {
+  if (req.query.pin !== METRICS_PIN)
+    return res.status(401).json({ error: 'Invalid PIN' });
+
+  const period  = req.query.period || 'month';
+  const data    = db.getMetrics(period);
+
+  // Also return individual events for transaction-level filtering
+  const cutoffs = { day: 1, week: 7, month: 30, year: 365 };
+  const days    = cutoffs[period] || 30;
+  const Database = require('better-sqlite3');
+  const path     = require('path');
+  const adminDb  = new Database(path.join(__dirname, 'mbuya.db'));
+  const events   = adminDb.prepare(`
+    SELECT id, code, profile, source, gross_ugx, net_ugx,
+           strftime('%Y-%m-%d %H:%M', recorded_at) AS recorded_at
+    FROM revenue_events
+    WHERE recorded_at >= datetime('now', '-${days} days')
+    ORDER BY recorded_at DESC
+    LIMIT 1000
+  `).all();
+
+  res.json({ ...data, events });
 });

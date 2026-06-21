@@ -26,11 +26,32 @@ db.exec(`
     last_update     TEXT DEFAULT (datetime('now')),
     session_seconds INTEGER NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS revenue_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL,
+    profile     TEXT    NOT NULL,
+    source      TEXT    NOT NULL,
+    gross_ugx   INTEGER NOT NULL,
+    net_ugx     INTEGER NOT NULL,
+    recorded_at TEXT    DEFAULT (datetime('now'))
+  );
 `);
 
-// ── Migrate existing databases that don't have the new columns yet ────────────
+// ── Migrate existing databases ────────────────────────────────────────────────
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN first_used_at TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN expires_at TEXT`);    } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS revenue_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL,
+    profile     TEXT    NOT NULL,
+    source      TEXT    NOT NULL,
+    gross_ugx   INTEGER NOT NULL,
+    net_ugx     INTEGER NOT NULL,
+    recorded_at TEXT    DEFAULT (datetime('now'))
+  )
+`); } catch(e) {}
 
 const PROFILE_SECONDS = {
   '1day':   86400,
@@ -108,7 +129,55 @@ module.exports = {
   },
 
   // ── RADIUS Accounting: Stop ───────────────────────────────────────────────
+  // Same as interim — add final session seconds to used_seconds.
   stopSession(sessionId, cumulativeSeconds) {
     this.updateSession(sessionId, cumulativeSeconds);
+  },
+
+  // ── Record a revenue event ────────────────────────────────────────────────
+  // source: 'voucher' | 'mobile_money'
+  // mobile_money earns 96% of face value; vouchers earn 100%
+  recordRevenue(code, profile, source) {
+    const PRICES   = { '1day': 1000, '1week': 5000, '1month': 20000 };
+    const gross    = PRICES[profile] || 0;
+    const net      = source === 'mobile_money' ? Math.floor(gross * 0.96) : gross;
+    db.prepare(`
+      INSERT INTO revenue_events (code, profile, source, gross_ugx, net_ugx)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(code, profile, source, gross, net);
+  },
+
+  // ── Metrics query ─────────────────────────────────────────────────────────
+  // Returns daily totals and per-day rows for the requested period
+  getMetrics(period) {
+    // period: 'day' | 'week' | 'month' | 'year'
+    const cutoffs = { day: 1, week: 7, month: 30, year: 365 };
+    const days    = cutoffs[period] || 30;
+    const rows    = db.prepare(`
+      SELECT
+        date(recorded_at) AS day,
+        SUM(gross_ugx)    AS gross,
+        SUM(net_ugx)      AS net,
+        COUNT(*)          AS count,
+        SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
+        SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
+      FROM revenue_events
+      WHERE recorded_at >= datetime('now', '-${days} days')
+      GROUP BY date(recorded_at)
+      ORDER BY day ASC
+    `).all();
+
+    const totals = db.prepare(`
+      SELECT
+        SUM(gross_ugx) AS gross,
+        SUM(net_ugx)   AS net,
+        COUNT(*)       AS count,
+        SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
+        SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
+      FROM revenue_events
+      WHERE recorded_at >= datetime('now', '-${days} days')
+    `).get();
+
+    return { rows, totals: totals || { gross:0, net:0, count:0, mm_net:0, v_net:0 } };
   },
 };
