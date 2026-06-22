@@ -1,4 +1,7 @@
 // db.js — SQLite database for persistent voucher tracking
+// Time model: WALL-CLOCK (expires_at = first_used_at + allocated_seconds)
+// The timer runs from first activation regardless of whether user is connected.
+
 const Database = require('better-sqlite3');
 const path     = require('path');
 
@@ -33,27 +36,41 @@ db.exec(`
     net_ugx     INTEGER NOT NULL,
     recorded_at TEXT    DEFAULT (datetime('now'))
   );
-
-  CREATE TABLE IF NOT EXISTS mac_bindings (
-    mac        TEXT PRIMARY KEY,
-    code       TEXT NOT NULL,
-    bound_at   TEXT DEFAULT (datetime('now'))
-  );
 `);
 
+// ── Migrate existing databases ────────────────────────────────────────────────
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN first_used_at TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN expires_at TEXT`);    } catch(e) {}
-try { db.exec(`ALTER TABLE vouchers ADD COLUMN mac TEXT`);          } catch(e) {} // kept for compatibility
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN printed_at TEXT`);    } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS revenue_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL,
+    profile     TEXT    NOT NULL,
+    source      TEXT    NOT NULL,
+    gross_ugx   INTEGER NOT NULL,
+    net_ugx     INTEGER NOT NULL,
+    recorded_at TEXT    DEFAULT (datetime('now'))
+  )
+`); } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS mac_bindings (
+    mac TEXT PRIMARY KEY, code TEXT NOT NULL,
+    bound_at TEXT DEFAULT (datetime('now'))
+  )
+`); } catch(e) {}
 
 const PROFILE_SECONDS = {
-  '1day':   86400,
-  '1week':  604800,
-  '1month': 2592000,
+  'mini-day': 14400,
+  '1day':     86400,
+  '1week':    604800,
+  '1month':   2592000,
 };
 
 module.exports = {
   PROFILE_SECONDS,
 
+  // ── Create voucher (admin generate or payment) ────────────────────────────
   createVoucher(code, profile) {
     const secs = PROFILE_SECONDS[profile] || 86400;
     db.prepare(`
@@ -63,16 +80,22 @@ module.exports = {
     `).run(code, profile, secs);
   },
 
+  // ── Get voucher with WALL-CLOCK remaining time ────────────────────────────
+  // remaining_seconds = expires_at - NOW  (if activated)
+  //                   = allocated_seconds (if never used)
   getVoucher(code) {
     const row = db.prepare('SELECT * FROM vouchers WHERE code = ?').get(code);
     if (!row) return null;
+
     let remaining_seconds;
     if (row.expires_at) {
       const expiresMs = new Date(row.expires_at).getTime();
       remaining_seconds = Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
     } else {
+      // Not yet activated — full allocation available
       remaining_seconds = row.allocated_seconds;
     }
+
     return {
       ...row,
       disabled: row.disabled === 1,
@@ -80,7 +103,7 @@ module.exports = {
     };
   },
 
-  // ── Look up voucher by MAC address ────────────────────────────
+   // ── Look up voucher by MAC address ────────────────────────────
   getVoucherByMac(mac) {
     if (!mac) return null;
     const binding = db.prepare(
@@ -100,8 +123,12 @@ module.exports = {
     console.log(`[DB] MAC ${mac.toUpperCase()} bound to ${code}`);
   },
 
+
+  // ── RADIUS Accounting: Start ──────────────────────────────────────────────
+  // On FIRST use: stamp first_used_at and calculate the hard expiry time.
+  // On subsequent logins: expiry is already set — don't change it.
   startSession(sessionId, code) {
-    const voucher = this.getVoucher(code);
+    const voucher = db.prepare('SELECT * FROM vouchers WHERE code = ?').get(code);
     if (voucher && !voucher.first_used_at) {
       const now       = new Date();
       const expiresAt = new Date(now.getTime() + voucher.allocated_seconds * 1000);
@@ -109,6 +136,7 @@ module.exports = {
         .run(now.toISOString(), expiresAt.toISOString(), code);
       console.log(`[DB] Voucher ${code} activated — expires ${expiresAt.toISOString()}`);
     }
+
     db.prepare(`
       INSERT OR REPLACE INTO sessions
         (session_id, code, started_at, last_update, session_seconds)
@@ -116,6 +144,8 @@ module.exports = {
     `).run(sessionId, code);
   },
 
+  // ── RADIUS Accounting: Interim-Update ────────────────────────────────────
+  // Track actual connected seconds for reporting (not used for remaining time).
   updateSession(sessionId, cumulativeSeconds) {
     const sess = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId);
     if (!sess) return;
@@ -131,8 +161,21 @@ module.exports = {
     this.updateSession(sessionId, cumulativeSeconds);
   },
 
+  // ── Record a revenue event ────────────────────────────────────────────────
+  // source: 'voucher' | 'mobile_money'
+  // mobile_money earns 96% of face value; vouchers earn 100%
+  // ── Mark vouchers as printed ──────────────────────────────────────────────
+  // Prevents them from appearing in the next print batch.
+  markPrinted(codes) {
+    const stmt = db.prepare(
+      `UPDATE vouchers SET printed_at = datetime('now') WHERE code = ? AND printed_at IS NULL`
+    );
+    const run = db.transaction(() => codes.forEach(c => stmt.run(c)));
+    run();
+  },
+
   recordRevenue(code, profile, source) {
-    const PRICES   = { '1day': 1000, '1week': 5000, '1month': 20000 };
+    const PRICES   = { 'mini-day': 500, '1day': 1000, '1week': 5000, '1month': 20000 };
     const gross    = PRICES[profile] || 0;
     const net      = source === 'mobile_money' ? Math.floor(gross * 0.96) : gross;
     db.prepare(`
@@ -141,7 +184,10 @@ module.exports = {
     `).run(code, profile, source, gross, net);
   },
 
+  // ── Metrics query ─────────────────────────────────────────────────────────
+  // Returns daily totals and per-day rows for the requested period
   getMetrics(period) {
+    // period: 'day' | 'week' | 'month' | 'year'
     const cutoffs = { day: 1, week: 7, month: 30, year: 365 };
     const days    = cutoffs[period] || 30;
     const rows    = db.prepare(`
