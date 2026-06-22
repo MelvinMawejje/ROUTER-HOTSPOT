@@ -135,6 +135,20 @@ module.exports = {
       .run(cumulativeSeconds, sessionId);
   },
 
+  // ── RADIUS Accounting: Stop ───────────────────────────────────────────────
+  // Final update of used_seconds and removal of the session record.
+  stopSession(sessionId, cumulativeSeconds) {
+    const sess = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId);
+    if (!sess) return;
+    const delta = cumulativeSeconds - sess.session_seconds;
+    if (delta > 0) {
+      db.prepare(`UPDATE vouchers SET used_seconds = used_seconds + ? WHERE code = ?`)
+        .run(delta, sess.code);
+    }
+    // Remove the session entry to keep the table clean.
+    db.prepare(`DELETE FROM sessions WHERE session_id = ?`).run(sessionId);
+  },
+
   // ── Record a revenue event ────────────────────────────────────────────────
   // source: 'voucher' | 'mobile_money'
   // mobile_money earns 96% of face value; vouchers earn 100%
