@@ -321,6 +321,19 @@ app.post('/api/session/logout', async (req, res) => {
   }
 });
 
+// ── Mark a batch of vouchers as printed ───────────────────────────────────────
+app.post('/api/admin/vouchers/mark-printed', (req, res) => {
+  const codes = req.body.codes;
+  if (!Array.isArray(codes) || !codes.length)
+    return res.status(400).json({ success: false, message: 'No codes provided.' });
+  try {
+    db.markPrinted(codes);
+    res.json({ success: true, count: codes.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
 // ── Disable a voucher (kicks active session too) ──────────────────────────────
 app.post('/api/admin/vouchers/disable', async (req, res) => {
   const { code } = req.body;

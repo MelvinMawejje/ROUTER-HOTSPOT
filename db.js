@@ -41,6 +41,7 @@ db.exec(`
 // ── Migrate existing databases ────────────────────────────────────────────────
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN first_used_at TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN expires_at TEXT`);    } catch(e) {}
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN printed_at TEXT`);    } catch(e) {}
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS revenue_events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +51,12 @@ try { db.exec(`
     gross_ugx   INTEGER NOT NULL,
     net_ugx     INTEGER NOT NULL,
     recorded_at TEXT    DEFAULT (datetime('now'))
+  )
+`); } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS mac_bindings (
+    mac TEXT PRIMARY KEY, code TEXT NOT NULL,
+    bound_at TEXT DEFAULT (datetime('now'))
   )
 `); } catch(e) {}
 
@@ -128,15 +135,19 @@ module.exports = {
       .run(cumulativeSeconds, sessionId);
   },
 
-  // ── RADIUS Accounting: Stop ───────────────────────────────────────────────
-  // Same as interim — add final session seconds to used_seconds.
-  stopSession(sessionId, cumulativeSeconds) {
-    this.updateSession(sessionId, cumulativeSeconds);
-  },
-
   // ── Record a revenue event ────────────────────────────────────────────────
   // source: 'voucher' | 'mobile_money'
   // mobile_money earns 96% of face value; vouchers earn 100%
+  // ── Mark vouchers as printed ──────────────────────────────────────────────
+  // Prevents them from appearing in the next print batch.
+  markPrinted(codes) {
+    const stmt = db.prepare(
+      `UPDATE vouchers SET printed_at = datetime('now') WHERE code = ? AND printed_at IS NULL`
+    );
+    const run = db.transaction(() => codes.forEach(c => stmt.run(c)));
+    run();
+  },
+
   recordRevenue(code, profile, source) {
     const PRICES   = { '1day': 1000, '1week': 5000, '1month': 20000 };
     const gross    = PRICES[profile] || 0;

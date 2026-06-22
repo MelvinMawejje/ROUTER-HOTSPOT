@@ -57,42 +57,29 @@ tr:hover td{background:rgba(0,198,178,.03)}
 /* Toast */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--teal);color:var(--navy);font-family:'Syne',sans-serif;font-weight:700;padding:12px 24px;border-radius:50px;font-size:.88rem;opacity:0;transition:opacity .3s,transform .3s;z-index:999;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-/* Metrics modal — full screen */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;display:none;align-items:center;justify-content:center;padding:12px;backdrop-filter:blur(6px)}
+/* Metrics modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;display:none;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)}
 .modal-overlay.open{display:flex}
-.metrics-box{background:var(--card-bg);border:1px solid var(--border);border-radius:20px;width:96vw;height:94vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .35s cubic-bezier(.22,.68,0,1.2)}
-@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-.metrics-header{padding:18px 24px 0;flex-shrink:0}
-.metrics-title-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.period-tabs-top{display:flex;gap:8px;padding:0 24px 14px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
-.ptab{background:var(--input-bg);border:1.5px solid var(--border);color:var(--muted);border-radius:10px;padding:9px 22px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;letter-spacing:.05em;transition:all .18s;flex:1;text-align:center;min-width:80px}
-.ptab:hover{border-color:var(--teal);color:var(--teal)}
-.ptab.active{background:rgba(0,198,178,.15);border-color:var(--teal);color:var(--teal);box-shadow:0 0 0 2px rgba(0,198,178,.1)}
-.metrics-body{flex:1;overflow-y:auto;padding:20px 24px}
-.pin-box{max-width:320px;margin:40px auto;text-align:center}
-.pin-input{font-size:1.6rem;letter-spacing:.5em;text-align:center;width:100%;background:var(--input-bg);border:1.5px solid var(--border);color:var(--white);border-radius:10px;padding:14px;outline:none}
-.pin-input:focus{border-color:var(--teal)}
-.rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:22px}
+.metrics-box{background:var(--card-bg);border:1px solid var(--border);border-radius:20px;padding:28px;width:100%;max-width:720px;max-height:90vh;overflow-y:auto;animation:slideUp .35s cubic-bezier(.22,.68,0,1.2)}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.pin-box{max-width:320px;margin:0 auto;text-align:center;padding:20px 0}
+.pin-input{font-size:1.6rem;letter-spacing:.5em;text-align:center;width:100%;background:var(--input-bg);border:1.5px solid var(--border);color:var(--white);border-radius:10px;padding:14px}
+.period-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.period-tab{background:var(--input-bg);border:1.5px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 16px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.06em;transition:all .2s}
+.period-tab.active{background:rgba(0,198,178,.12);border-color:var(--teal);color:var(--teal)}
+.rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
 .rev-card{background:var(--input-bg);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
-.rev-card .rc-val{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;color:var(--teal)}
-.rev-card .rc-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
-.cal-wrap{overflow-x:auto;margin-bottom:6px}
+.rev-card .rc-val{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;color:var(--teal)}
+.rev-card .rc-lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+/* Calendar heatmap */
+.cal-wrap{overflow-x:auto;margin-bottom:8px}
 .cal-grid{display:flex;gap:3px;min-width:fit-content}
 .cal-col{display:flex;flex-direction:column;gap:3px}
-.cal-cell{width:16px;height:16px;border-radius:3px;background:rgba(255,255,255,.06);cursor:pointer;position:relative;transition:transform .1s,box-shadow .1s;flex-shrink:0}
-.cal-cell:hover{transform:scale(1.4);z-index:10;box-shadow:0 0 0 2px var(--teal)}
-.cal-cell.selected{box-shadow:0 0 0 2px #fff;transform:scale(1.25)}
-.cal-cell[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:22px;left:50%;transform:translateX(-50%);background:#0a1628;border:1px solid var(--border);color:var(--white);font-size:.7rem;padding:5px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;z-index:30}
-.cal-month-labels{display:flex;gap:3px;margin-bottom:5px;min-width:fit-content}
+.cal-cell{width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.06);cursor:pointer;position:relative;transition:transform .1s}
+.cal-cell:hover{transform:scale(1.3);z-index:10}
+.cal-cell[data-v]:hover::after{content:attr(data-v);position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#0d1f3c;border:1px solid var(--border);color:var(--white);font-size:.7rem;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:20}
+.cal-month-labels{display:flex;gap:3px;margin-bottom:4px;min-width:fit-content}
 .cal-month-lbl{font-size:.62rem;color:var(--muted);font-family:'Syne',sans-serif}
-.cal-hint{font-size:.75rem;color:var(--muted);text-align:center;margin-top:10px;letter-spacing:.04em}
-.day-tx-panel{background:var(--input-bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:18px}
-.day-tx-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px}
-.day-tx-title{font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;color:var(--white)}
-.src-tabs{display:flex;gap:6px}
-.src-tab{background:transparent;border:1.5px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 13px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.72rem;font-weight:700;transition:all .15s}
-.src-tab.active{border-color:var(--teal);color:var(--teal);background:rgba(0,198,178,.08)}
-.tx-footer{margin-top:10px;font-size:.75rem;color:var(--muted)}
 @media print {
   body {
     background: #fff !important;
@@ -146,7 +133,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
   <h1>MBUYA <span>WIFI</span> Admin</h1>
   <div style="display:flex;gap:8px">
     <button class="btn btn-outline btn-sm" onclick="loadAll()">↻ Refresh</button>
-    <button class="btn btn-sm btn-teal" style="width:auto;margin-top:0" onclick="window.print()">🖨 Print Vouchers</button>
+    <button class="btn btn-sm btn-teal" style="width:auto;margin-top:0" onclick="printVouchers()">🖨 Print Vouchers</button>
     <button class="btn btn-sm btn-outline" style="margin-top:0;border-color:rgba(255,200,0,.4);color:#ffc800" onclick="openMetrics()">📊 Metrics</button>
   </div>
 </div>
@@ -236,119 +223,109 @@ tr:hover td{background:rgba(0,198,178,.03)}
 <!-- Metrics modal -->
 <div class="modal-overlay" id="metricsModal">
   <div class="metrics-box">
-
-    <!-- Fixed header: title + close -->
-    <div class="metrics-header">
-      <div class="metrics-title-row">
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.15rem;color:var(--white)">📊 Revenue Metrics</div>
-        <button class="btn btn-sm btn-outline" onclick="closeMetrics()" style="margin-top:0">✕ Close</button>
-      </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--white)">📊 Revenue Metrics</div>
+      <button class="btn btn-sm btn-outline" onclick="closeMetrics()" style="margin-top:0">✕ Close</button>
     </div>
 
-    <!-- Period tabs pinned below header -->
-    <div class="period-tabs-top" id="periodTabsRow" style="display:none">
-      <button class="ptab active" onclick="switchPeriod('day',this)">Today</button>
-      <button class="ptab" onclick="switchPeriod('week',this)">This Week</button>
-      <button class="ptab" onclick="switchPeriod('month',this)">This Month</button>
-      <button class="ptab" onclick="switchPeriod('year',this)">This Year</button>
+    <!-- PIN gate -->
+    <div id="pinGate" class="pin-box">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px;letter-spacing:.06em;text-transform:uppercase">Enter Metrics PIN</div>
+      <input class="pin-input" type="password" id="metricsPin" maxlength="8" placeholder="····"
+        onkeydown="if(event.key==='Enter') checkPin()"/>
+      <button class="btn btn-teal" style="max-width:200px;margin:14px auto 0" onclick="checkPin()">View Metrics</button>
+      <div id="pinError" style="color:var(--red);font-size:.8rem;margin-top:10px;display:none">Incorrect PIN. Try again.</div>
     </div>
 
-    <!-- Scrollable body -->
-    <div class="metrics-body">
-
-      <!-- PIN gate -->
-      <div id="pinGate" class="pin-box">
-        <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px;letter-spacing:.06em;text-transform:uppercase">Enter Metrics PIN</div>
-        <input class="pin-input" type="password" id="metricsPin" maxlength="8" placeholder="····"
-          onkeydown="if(event.key==='Enter') checkPin()"/>
-        <button class="btn btn-teal" style="max-width:200px;margin:14px auto 0;display:block" onclick="checkPin()">View Metrics</button>
-        <div id="pinError" style="color:var(--red);font-size:.8rem;margin-top:10px;display:none">Incorrect PIN. Try again.</div>
+    <!-- Metrics content (hidden until PIN correct) -->
+    <div id="metricsContent" style="display:none">
+      <!-- Period tabs -->
+      <div class="period-tabs">
+        <button class="period-tab active" onclick="switchPeriod('day',this)">Today</button>
+        <button class="period-tab" onclick="switchPeriod('week',this)">This Week</button>
+        <button class="period-tab" onclick="switchPeriod('month',this)">This Month</button>
+        <button class="period-tab" onclick="switchPeriod('year',this)">This Year</button>
       </div>
 
-      <!-- Metrics content -->
-      <div id="metricsContent" style="display:none">
-
-        <!-- Summary cards (controlled by period filter) -->
-        <div class="rev-grid">
-          <div class="rev-card">
-            <div class="rc-val" id="mNetTotal">—</div>
-            <div class="rc-lbl">Net Revenue</div>
-          </div>
-          <div class="rev-card">
-            <div class="rc-val" id="mGrossTotal">—</div>
-            <div class="rc-lbl">Gross Revenue</div>
-          </div>
-          <div class="rev-card">
-            <div class="rc-val" id="mCount">—</div>
-            <div class="rc-lbl">Vouchers Sold</div>
-          </div>
-          <div class="rev-card">
-            <div class="rc-val" id="mMmNet" style="color:#ffc800">—</div>
-            <div class="rc-lbl">Mobile Money (96%)</div>
-          </div>
-          <div class="rev-card">
-            <div class="rc-val" id="mVNet" style="color:#a78bfa">—</div>
-            <div class="rc-lbl">Cash Vouchers</div>
-          </div>
+      <!-- Summary cards -->
+      <div class="rev-grid">
+        <div class="rev-card">
+          <div class="rc-val" id="mNetTotal">—</div>
+          <div class="rc-lbl">Net Revenue</div>
         </div>
-
-        <!-- Calendar heatmap (hidden for Today) -->
-        <div id="calSection">
-          <div style="font-family:'Syne',sans-serif;font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin-bottom:10px">Revenue Calendar</div>
-          <div class="cal-wrap">
-            <div class="cal-month-labels" id="calMonthLabels"></div>
-            <div class="cal-grid" id="calGrid"></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.7rem;color:var(--muted)">
-            <span>Less</span>
-            <div style="width:13px;height:13px;border-radius:2px;background:rgba(255,255,255,.06)"></div>
-            <div style="width:13px;height:13px;border-radius:2px;background:rgba(0,198,178,.2)"></div>
-            <div style="width:13px;height:13px;border-radius:2px;background:rgba(0,198,178,.45)"></div>
-            <div style="width:13px;height:13px;border-radius:2px;background:rgba(0,198,178,.7)"></div>
-            <div style="width:13px;height:13px;border-radius:2px;background:#00c6b2"></div>
-            <span>More</span>
-            <span style="margin-left:8px">· Click any date to see its transactions</span>
-          </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mGrossTotal">—</div>
+          <div class="rc-lbl">Gross Revenue</div>
         </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mCount">—</div>
+          <div class="rc-lbl">Vouchers Sold</div>
+        </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mMmNet" style="color:#ffc800">—</div>
+          <div class="rc-lbl">Mobile Money (96%)</div>
+        </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mVNet" style="color:#a78bfa">—</div>
+          <div class="rc-lbl">Cash Vouchers</div>
+        </div>
+      </div>
 
-        <!-- Day transactions panel -->
-        <div class="day-tx-panel" id="dayTxPanel" style="display:none">
-          <div class="day-tx-header">
-            <div class="day-tx-title" id="dayTxTitle">Transactions</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <div class="src-tabs">
-                <button class="src-tab active" id="stAll"  onclick="filterDayTx('all',this)">All</button>
-                <button class="src-tab" id="stMM"   onclick="filterDayTx('mobile_money',this)" style="color:#ffc800">📱 Mobile</button>
-                <button class="src-tab" id="stCash" onclick="filterDayTx('voucher',this)" style="color:#a78bfa">🎟 Cash</button>
-              </div>
-              <button class="btn btn-sm btn-outline" onclick="closeDayTx()" style="margin:0;padding:5px 10px">✕</button>
+      <!-- Calendar heatmap -->
+      <div class="card-title" style="margin-bottom:10px">Daily Revenue Calendar</div>
+      <div class="cal-wrap">
+        <div class="cal-month-labels" id="calMonthLabels"></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.7rem;color:var(--muted)">
+        <span>Less</span>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(255,255,255,.06)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.2)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.45)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.7)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:#00c6b2"></div>
+        <span>More</span>
+      </div>
+
+      <!-- Day transaction panel — populated when a date is clicked or Today is selected -->
+      <div class="day-tx-panel" id="dayTxPanel" style="display:none;">
+        <div class="day-tx-header">
+          <div class="day-tx-title" id="dayTxTitle">Transactions</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="src-tabs">
+              <button class="src-tab active" id="stAll"  onclick="filterDayTx('all',this)">All</button>
+              <button class="src-tab" id="stMM"   onclick="filterDayTx('mobile_money',this)" style="color:#ffc800">📱 Mobile</button>
+              <button class="src-tab" id="stCash" onclick="filterDayTx('voucher',this)" style="color:#a78bfa">🎟 Cash</button>
             </div>
+            <button class="btn btn-sm btn-outline" onclick="closeDayTx()" style="margin:0;padding:5px 10px">✕</button>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Time</th><th>Code</th><th>Package</th><th>Source</th><th>Gross</th><th>Net</th></tr></thead>
-              <tbody id="dayTxBody"></tbody>
-            </table>
-          </div>
-          <div class="tx-footer" id="dayTxFooter"></div>
         </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Code</th><th>Package</th><th>Source</th><th>Gross</th><th>Net</th></tr></thead>
+            <tbody id="dayTxBody"></tbody>
+          </table>
+        </div>
+        <div class="tx-footer" id="dayTxFooter"></div>
+      </div>
 
-      </div><!-- /metricsContent -->
-    </div><!-- /metrics-body -->
-  </div><!-- /metrics-box -->
-</div><!-- /metricsModal -->
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-const API = '';
+const API = '';  // same origin
 
 var allVouchers = [];
 
+// ── Load everything on start ──────────────────────────────────────────────────
 async function loadAll() {
   await Promise.all([loadVouchers(), loadSessions()]);
 }
 
+// ── Vouchers ──────────────────────────────────────────────────────────────────
 async function loadVouchers() {
   try {
     const r    = await fetch(API + '/api/admin/vouchers');
@@ -357,25 +334,34 @@ async function loadVouchers() {
     renderStats(allVouchers);
     renderTable(allVouchers);
     renderPrintCards(allVouchers);
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    console.error(e);
+  }
 }
 
 function renderStats(rows) {
-  document.getElementById('statTotal').textContent   = rows.length;
-  document.getElementById('statExpired').textContent = rows.filter(v => v.remaining_seconds <= 0 || v.disabled).length;
-  document.getElementById('statUnused').textContent  = rows.filter(v => !v.first_used_at && !v.disabled).length;
+  const total   = rows.length;
+  const expired = rows.filter(v => v.remaining_seconds <= 0 || v.disabled).length;
+  const unused  = rows.filter(v => !v.first_used_at && !v.disabled).length;  // <-- changed
+  document.getElementById('statTotal').textContent   = total;
+  document.getElementById('statExpired').textContent = expired;
+  document.getElementById('statUnused').textContent  = unused;
 }
 
 function filterTable() {
   const profile = document.getElementById('filterProfile').value;
   const status  = document.getElementById('filterStatus').value;
   const search  = document.getElementById('filterSearch').value.trim().toLowerCase();
+
   const filtered = allVouchers.filter(v => {
     if (profile && v.profile !== profile) return false;
     if (search  && !v.code.toLowerCase().includes(search)) return false;
-    if (status === 'unused'  && v.first_used_at) return false;
-    if (status === 'used'    && (!v.first_used_at || v.remaining_seconds <= 0 || v.disabled)) return false;
-    if (status === 'expired' && v.remaining_seconds > 0 && !v.disabled) return false;
+    if (status) {
+      const pct = v.used_seconds / v.allocated_seconds;
+      if (status === 'unused'  && v.used_seconds > 0) return false;
+      if (status === 'used' && (!v.first_used_at || v.remaining_seconds <= 0 || v.disabled)) return false;
+      if (status === 'expired' && pct < 1 && !v.disabled) return false;
+    }
     return true;
   });
   renderTable(filtered);
@@ -388,17 +374,20 @@ function renderTable(rows) {
     document.getElementById('tableFooter').textContent = '';
     return;
   }
-  const pLabel = {'1day':'1 Day','1week':'1 Week','1month':'1 Month'};
+
   tbody.innerHTML = rows.map(v => {
-    let badge;
-    if (v.disabled)                    badge = '<span class="badge badge-used">Disabled</span>';
-    else if (v.remaining_seconds <= 0) badge = '<span class="badge badge-used">Expired</span>';
-    else if (v.first_used_at)          badge = '<span class="badge badge-partial">Active</span>';
-    else                               badge = '<span class="badge badge-unused">Unused</span>';
+    const rem  = fmtSec(v.remaining_seconds);
+    const profileLabel = { '1day':'1 Day','1week':'1 Week','1month':'1 Month' }[v.profile] || v.profile;
+
+      let badge;
+      if (v.disabled)                        badge = '<span class="badge badge-used">Disabled</span>';
+      else if (v.remaining_seconds <= 0)     badge = '<span class="badge badge-used">Expired</span>';
+      else if (v.first_used_at)              badge = '<span class="badge badge-partial">Used</span>';   // re-use the same style, just change text
+      else                                   badge = '<span class="badge badge-unused">Unused</span>';
     return `<tr>
       <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${v.code}</td>
-      <td>${pLabel[v.profile]||v.profile}</td>
-      <td style="font-size:.78rem;color:var(--muted)">${fmtSec(v.remaining_seconds)} remaining</td>
+      <td>${profileLabel}</td>
+      <td style="font-size:.78rem;color:var(--muted)">${rem} remaining</td>
       <td>${badge}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm btn-outline" onclick="copyCode('${v.code}')" title="Copy">📋</button>
@@ -408,26 +397,71 @@ function renderTable(rows) {
       </td>
     </tr>`;
   }).join('');
+
   document.getElementById('tableFooter').textContent = `Showing ${rows.length} of ${allVouchers.length} vouchers`;
 }
 
+var pendingPrintCodes = [];  // tracks codes in the current print batch
+
 function renderPrintCards(rows) {
-  const pLabel = {'1day':'1 Day – UGX 1,000','1week':'1 Week – UGX 5,000','1month':'1 Month – UGX 20,000'};
-  document.getElementById('printArea').innerHTML = rows
-    .filter(v => !v.disabled && !v.first_used_at)
-    .map(v => `<div class="v-card">
+  const profileLabel = { '1day':'1 Day – UGX 1,000','1week':'1 Week – UGX 5,000','1month':'1 Month – UGX 20,000' };
+  // Only show vouchers that are: not disabled, never used, and never printed before
+  const printable = rows.filter(v => !v.disabled && !v.first_used_at && !v.printed_at);
+  pendingPrintCodes = printable.map(v => v.code);
+
+  if (!printable.length) {
+    document.getElementById('printArea').innerHTML =
+      '<p style="font-family:sans-serif;color:#666;padding:20px;">No unprinted unused vouchers available.</p>';
+    return;
+  }
+
+  document.getElementById('printArea').innerHTML = printable.map(v => `
+    <div class="v-card">
       <div class="vc-title">🌐 MBUYA WIFI</div>
       <div class="vc-code">${v.code}</div>
-      <div class="vc-profile">${pLabel[v.profile]||v.profile}</div>
-    </div>`).join('');
+      <div class="vc-profile">${profileLabel[v.profile] || v.profile}</div>
+    </div>
+  `).join('');
 }
 
+// Called by the Print button — triggers print then marks batch as printed
+function printVouchers() {
+  if (!pendingPrintCodes.length) {
+    alert('No unprinted unused vouchers to print. Generate more first.');
+    return;
+  }
+  window.print();
+}
+
+// After print dialog closes (whether printed or cancelled), mark the batch
+// so these codes never appear again in future print runs
+window.onafterprint = async function() {
+  if (!pendingPrintCodes.length) return;
+  try {
+    const r = await fetch(API + '/api/admin/vouchers/mark-printed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes: pendingPrintCodes }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      showToast(`🖨 ${data.count} vouchers marked as printed`);
+      pendingPrintCodes = [];
+      loadVouchers();  // refresh table so printed ones update
+    }
+  } catch(e) {
+    console.error('mark-printed error:', e);
+  }
+};
+
+// ── Live sessions ─────────────────────────────────────────────────────────────
 async function loadSessions() {
   try {
     const r    = await fetch(API + '/api/admin/sessions');
     const data = await r.json();
     const rows = data.sessions || [];
     document.getElementById('statActive').textContent = rows.length;
+
     const tbody = document.getElementById('sessionTable');
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No active sessions</td></tr>';
@@ -437,87 +471,109 @@ async function loadSessions() {
       <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${s.user}</td>
       <td>${fmtDur(s.uptime)}</td>
       <td>${s['session-time-left'] ? fmtDur(s['session-time-left']) : '∞'}</td>
-      <td style="color:var(--muted);font-size:.78rem">${s.address||'—'}</td>
+      <td style="color:var(--muted);font-size:.78rem">${s.address || '—'}</td>
       <td><button class="btn btn-sm btn-danger" onclick="kickSession('${s.user}')">Kick</button></td>
     </tr>`).join('');
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    console.error(e);
+  }
 }
 
+// ── Generate vouchers ─────────────────────────────────────────────────────────
 async function generateVouchers() {
   const profile = document.getElementById('genProfile').value;
   const type    = document.getElementById('genType').value;
   const length  = parseInt(document.getElementById('genLength').value);
-  const qty     = parseInt(document.getElementById('genQty').value)||1;
+  const qty     = parseInt(document.getElementById('genQty').value) || 1;
   const btn     = event.target;
-  btn.disabled = true; btn.textContent = 'Generating…';
+  btn.disabled  = true; btn.textContent = 'Generating…';
+
   try {
-    const r = await fetch(API+'/api/admin/vouchers/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile,qty,type,length})});
-    const d = await r.json();
-    if (d.success) { showToast(`✅ ${d.count} vouchers created`); await loadAll(); }
-    else showToast('❌ '+(d.message||'Error'));
-  } catch(e) { showToast('❌ Network error'); }
-  finally { btn.disabled=false; btn.textContent='Generate Vouchers'; }
+    const r    = await fetch(API + '/api/admin/vouchers/generate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ profile, qty, type, length }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      showToast(`✅ ${data.count} vouchers created`);
+      await loadAll();
+    } else {
+      showToast('❌ ' + (data.message || 'Error'));
+    }
+  } catch(e) {
+    showToast('❌ Network error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate Vouchers';
+  }
 }
 
+// ── Disable / kick ────────────────────────────────────────────────────────────
 async function disableVoucher(code) {
-  if (!confirm(`Disable voucher ${code}?`)) return;
-  const r = await fetch(API+'/api/admin/vouchers/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
-  const d = await r.json();
-  showToast(d.success?'✅ Voucher disabled':'❌ '+(d.message||'Error'));
+  if (!confirm(`Disable voucher ${code}? The user will be disconnected.`)) return;
+  const r    = await fetch(API + '/api/admin/vouchers/disable', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code })
+  });
+  const data = await r.json();
+  showToast(data.success ? '✅ Voucher disabled' : '❌ ' + data.message);
   loadAll();
 }
 
 async function kickSession(user) {
   if (!confirm(`Disconnect ${user}?`)) return;
-  const r = await fetch(API+'/api/session/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user})});
-  const d = await r.json();
-  showToast(d.success?'✅ Session ended':'❌ '+(d.message||'Error'));
+  const r    = await fetch(API + '/api/session/logout', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user })
+  });
+  const data = await r.json();
+  showToast(data.success ? '✅ Session ended' : '❌ ' + data.message);
   loadSessions();
 }
 
-function copyCode(code) { navigator.clipboard.writeText(code).then(()=>showToast('📋 Copied!')); }
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(() => showToast('📋 Copied!'));
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2800);
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
 }
+
 function fmtSec(s) {
-  if (!s||s<=0) return '0m';
-  const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);
-  if (d) return `${d}d ${h}h`; if (h) return `${h}h ${m}m`; return `${m}m`;
+  if (!s || s <= 0) return '0m';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
 }
+
 function fmtDur(str) {
-  if (!str||str==='0s') return '0m';
-  const m=str.match(/(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+  if (!str || str === '0s') return '0m';
+  const m = str.match(/(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
   if (!m) return str;
-  const d=parseInt(m[1])||0,h=parseInt(m[2])||0,mn=parseInt(m[3])||0;
-  if (d) return `${d}d ${h}h`; if (h) return `${h}h ${mn}m`; return `${mn}m`;
+  const d=parseInt(m[1])||0, h=parseInt(m[2])||0, mn=parseInt(m[3])||0;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${mn}m`;
+  return `${mn}m`;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// METRICS
-// ════════════════════════════════════════════════════════════════════════════
+// ── Metrics ───────────────────────────────────────────────────────────────────
 var metricsPinOk  = false;
-var metricsPin    = '';
 var currentPeriod = 'month';
-var allEvents     = [];
-var dayEvents     = [];  // events for the selected day
-var selectedDay   = null;
-
-function ugx(n) { return 'UGX ' + (Number(n)||0).toLocaleString(); }
+var metricsPin    = '';
 
 function openMetrics() {
   document.getElementById('metricsModal').classList.add('open');
+  document.getElementById('metricsPin').value = '';
+  document.getElementById('pinError').style.display = 'none';
   if (!metricsPinOk) {
-    document.getElementById('pinGate').style.display      = 'block';
+    document.getElementById('pinGate').style.display     = 'block';
     document.getElementById('metricsContent').style.display = 'none';
-    document.getElementById('periodTabsRow').style.display  = 'none';
-    document.getElementById('metricsPin').value = '';
-    document.getElementById('pinError').style.display = 'none';
-    setTimeout(()=>document.getElementById('metricsPin').focus(),100);
   } else {
     loadMetrics(currentPeriod);
   }
+  setTimeout(() => document.getElementById('metricsPin').focus(), 100);
 }
 
 function closeMetrics() {
@@ -526,27 +582,25 @@ function closeMetrics() {
 
 async function checkPin() {
   const entered = document.getElementById('metricsPin').value.trim();
-  const r = await fetch(API+'/api/admin/metrics?pin='+encodeURIComponent(entered)+'&period=day');
-  if (r.status===401) {
-    document.getElementById('pinError').style.display='block';
-    document.getElementById('metricsPin').value='';
+  // Test the PIN against the server — server rejects with 401 if wrong
+  const r = await fetch(API + '/api/admin/metrics?pin=' + encodeURIComponent(entered) + '&period=day');
+  if (r.status === 401) {
+    document.getElementById('pinError').style.display = 'block';
+    document.getElementById('metricsPin').value = '';
     return;
   }
-  metricsPin   = entered;
-  metricsPinOk = true;
+  metricsPin    = entered;
+  metricsPinOk  = true;
   document.getElementById('pinGate').style.display        = 'none';
-  document.getElementById('metricsContent').style.display  = 'block';
-  document.getElementById('periodTabsRow').style.display   = 'flex';
-  document.getElementById('pinError').style.display        = 'none';
+  document.getElementById('metricsContent').style.display = 'block';
+  document.getElementById('pinError').style.display       = 'none';
   loadMetrics(currentPeriod);
 }
 
 function switchPeriod(period, btn) {
   currentPeriod = period;
-  document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  closeDayTx();
-  selectedDay = null;
   loadMetrics(period);
 }
 
@@ -555,147 +609,236 @@ async function loadMetrics(period) {
     const r    = await fetch(`${API}/api/admin/metrics?pin=${encodeURIComponent(metricsPin)}&period=${period}`);
     const data = await r.json();
     renderMetrics(data, period);
-  } catch(e) { console.error('Metrics error:',e); }
+  } catch(e) {
+    console.error('Metrics error:', e);
+  }
+}
+
+var allEvents    = [];
+var currentSrc   = 'all';
+var currentTotals = {};  // stores full-period totals so we can reset cards after closing a day view
+
+function ugx(n) {
+  if (!n) return 'UGX 0';
+  return 'UGX ' + Number(n).toLocaleString();
+}
+
+// Update the five summary cards from any events array (full period OR a single day)
+function updateSummaryCards(events) {
+  const net   = events.reduce((s, e) => s + (e.net_ugx   || 0), 0);
+  const gross = events.reduce((s, e) => s + (e.gross_ugx  || 0), 0);
+  const count = events.length;
+  const mmNet = events.filter(e => e.source === 'mobile_money').reduce((s, e) => s + (e.net_ugx || 0), 0);
+  const vNet  = events.filter(e => e.source === 'voucher').reduce((s, e) => s + (e.net_ugx || 0), 0);
+  document.getElementById('mNetTotal').textContent   = ugx(net);
+  document.getElementById('mGrossTotal').textContent = ugx(gross);
+  document.getElementById('mCount').textContent      = count + ' voucher' + (count !== 1 ? 's' : '');
+  document.getElementById('mMmNet').textContent      = ugx(mmNet);
+  document.getElementById('mVNet').textContent       = ugx(vNet);
 }
 
 function renderMetrics(data, period) {
-  const t = data.totals||{};
-  document.getElementById('mNetTotal').textContent   = ugx(t.net);
-  document.getElementById('mGrossTotal').textContent = ugx(t.gross);
-  document.getElementById('mCount').textContent      = (t.count||0)+' vouchers';
-  document.getElementById('mMmNet').textContent      = ugx(t.mm_net);
-  document.getElementById('mVNet').textContent       = ugx(t.v_net);
+  currentTotals = data.totals || {};
+  allEvents     = data.events || [];
 
-  allEvents = data.events || [];
+  // Summary cards show the full period by default
+  updateSummaryCards(allEvents);
 
   if (period === 'day') {
     // Today: hide calendar, show today's transactions directly
     document.getElementById('calSection').style.display  = 'none';
-    const today = new Date().toISOString().slice(0,10);
+    const today = new Date().toISOString().slice(0, 10);
     showDayTransactions(today, 'Today');
   } else {
-    // Week/Month/Year: show calendar, hide transaction panel
+    // Week/Month/Year: show calendar, hide transactions until a date is clicked
     document.getElementById('calSection').style.display  = '';
-    document.getElementById('dayTxPanel').style.display   = 'none';
-    renderCalendar(data.rows||[], period);
+    document.getElementById('dayTxPanel').style.display  = 'none';
+    renderCalendar(data.rows || [], period);
   }
 }
 
-// Called when a calendar date cell is clicked
-function showDayTransactions(date, label) {
-  selectedDay = date;
-  dayEvents   = allEvents.filter(e => e.recorded_at && e.recorded_at.startsWith(date));
-
-  const title = label || formatDateLabel(date);
-  document.getElementById('dayTxTitle').textContent = 'Transactions · '+title;
-  document.getElementById('dayTxPanel').style.display = '';
-
-  // Reset source filter
-  document.querySelectorAll('.src-tab').forEach(b=>b.classList.remove('active'));
-  document.getElementById('stAll').classList.add('active');
-  renderDayTxTable(dayEvents);
-
-  // Scroll to panel
-  document.getElementById('dayTxPanel').scrollIntoView({behavior:'smooth',block:'start'});
-}
-
-function closeDayTx() {
-  document.getElementById('dayTxPanel').style.display = 'none';
-  // Deselect calendar cell
-  document.querySelectorAll('.cal-cell.selected').forEach(c=>c.classList.remove('selected'));
-  selectedDay = null;
-}
-
-function filterDayTx(src, btn) {
-  document.querySelectorAll('.src-tab').forEach(b=>b.classList.remove('active'));
+function filterTx(src, btn) {
+  currentSrc = src;
+  document.querySelectorAll('#srcAll,#srcMM,#srcCash').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const filtered = src==='all' ? dayEvents : dayEvents.filter(e=>e.source===src);
-  renderDayTxTable(filtered);
+  const filtered = src === 'all' ? allEvents : allEvents.filter(e => e.source === src);
+  renderTxTable(filtered);
 }
 
-function renderDayTxTable(events) {
-  const tbody  = document.getElementById('dayTxBody');
-  const pLabel = {'1day':'1 Day','1week':'1 Week','1month':'1 Month'};
+function renderTxTable(events) {
+  const tbody = document.getElementById('txTable');
+  const profileLabel = { '1day':'1 Day','1week':'1 Week','1month':'1 Month' };
   if (!events.length) {
-    tbody.innerHTML='<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No transactions</td></tr>';
-    document.getElementById('dayTxFooter').textContent='';
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No transactions</td></tr>';
+    document.getElementById('txFooter').textContent = '';
     return;
   }
   tbody.innerHTML = events.map(e => {
-    const isMM  = e.source==='mobile_money';
+    const isMM  = e.source === 'mobile_money';
     const badge = isMM
-      ? '<span class="badge" style="background:rgba(255,200,0,.12);color:#ffc800">📱 Mobile</span>'
+      ? '<span class="badge" style="background:rgba(255,200,0,.12);color:#ffc800">📱 Mobile Money</span>'
       : '<span class="badge" style="background:rgba(167,139,250,.12);color:#a78bfa">🎟 Cash</span>';
-    const time = e.recorded_at ? e.recorded_at.slice(11,16) : '—';
     return `<tr>
-      <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${time}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${e.recorded_at}</td>
       <td style="font-family:monospace;font-size:.78rem;color:var(--teal)">${e.code}</td>
-      <td>${pLabel[e.profile]||e.profile}</td>
+      <td>${profileLabel[e.profile] || e.profile}</td>
       <td>${badge}</td>
       <td style="color:var(--muted);font-size:.8rem">${ugx(e.gross_ugx)}</td>
       <td style="color:var(--teal);font-weight:600;font-size:.8rem">${ugx(e.net_ugx)}</td>
     </tr>`;
   }).join('');
-  const net   = events.reduce((s,e)=>s+(e.net_ugx||0),0);
-  const gross = events.reduce((s,e)=>s+(e.gross_ugx||0),0);
-  document.getElementById('dayTxFooter').textContent =
-    `${events.length} transaction${events.length!==1?'s':''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
-}
 
-function formatDateLabel(dateStr) {
-  const d = new Date(dateStr+'T00:00:00');
-  return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  // Footer totals for filtered view
+  const net   = events.reduce((s, e) => s + (e.net_ugx  || 0), 0);
+  const gross = events.reduce((s, e) => s + (e.gross_ugx || 0), 0);
+  document.getElementById('txFooter').textContent =
+    `${events.length} transaction${events.length !== 1 ? 's' : ''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
 }
 
 function renderCalendar(rows, period) {
+  // Build a map of day → net revenue
   const dayMap = {};
-  rows.forEach(r=>{dayMap[r.day]=r.net||0;});
-  const maxVal = Math.max(1,...Object.values(dayMap));
-  const nDays  = {day:1,week:7,month:30,year:365}[period]||30;
-  const today  = new Date();
-  const days   = [];
-  for (let i=nDays-1;i>=0;i--) {
-    const d=new Date(today); d.setDate(today.getDate()-i);
-    days.push(d.toISOString().slice(0,10));
+  rows.forEach(r => { dayMap[r.day] = r.net || 0; });
+  const maxVal = Math.max(1, ...Object.values(dayMap));
+
+  // How many days to show
+  const nDays = { day: 1, week: 7, month: 30, year: 365 }[period] || 30;
+  const today = new Date();
+  const days  = [];
+  for (let i = nDays - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
   }
-  function intensity(v){if(!v)return 0;const r=v/maxVal;return r<.2?1:r<.4?2:r<.7?3:4;}
-  const colors=['rgba(255,255,255,.06)','rgba(0,198,178,.2)','rgba(0,198,178,.45)','rgba(0,198,178,.7)','#00c6b2'];
-  const cols=[];
-  for (let i=0;i<days.length;i+=7) cols.push(days.slice(i,i+7));
+
+  // Group into weeks (columns of 7)
+  function intensity(val) {
+    if (!val) return 0;
+    const ratio = val / maxVal;
+    if (ratio < 0.2)  return 1;
+    if (ratio < 0.4)  return 2;
+    if (ratio < 0.7)  return 3;
+    return 4;
+  }
+  const colors = [
+    'rgba(255,255,255,.06)',
+    'rgba(0,198,178,.2)',
+    'rgba(0,198,178,.45)',
+    'rgba(0,198,178,.7)',
+    '#00c6b2'
+  ];
+
+  // Split into columns of up to 7 days
+  const cols = [];
+  for (let i = 0; i < days.length; i += 7) cols.push(days.slice(i, i + 7));
 
   const grid = document.getElementById('calGrid');
-  grid.innerHTML = cols.map(col=>`
+  grid.innerHTML = cols.map(col => `
     <div class="cal-col">
-      ${col.map(d=>{
-        const val=dayMap[d]||0;
-        const tip=`${formatDateLabel(d)} · ${ugx(val)}`;
-        const isSelected = d===selectedDay ? ' selected' : '';
-        return `<div class="cal-cell${isSelected}" style="background:${colors[intensity(val)]}"
+      ${col.map(d => {
+        const val = dayMap[d] || 0;
+        const tip = `${formatDateLabel(d)}: ${ugx(val)}`;
+        return `<div class="cal-cell" style="background:${colors[intensity(val)]}"
           data-tip="${tip}" data-date="${d}"
           onclick="onCalClick('${d}')"></div>`;
       }).join('')}
-    </div>`).join('');
+    </div>
+  `).join('');
 
-  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let lastM=-1;
-  document.getElementById('calMonthLabels').innerHTML = cols.map(col=>{
-    const m=new Date(col[0]).getMonth();
-    if (m!==lastM){lastM=m;return `<div class="cal-month-lbl" style="width:${col.length*19}px">${months[m]}</div>`;}
-    return `<div style="width:${col.length*19}px"></div>`;
+  // Month labels
+  const labels = document.getElementById('calMonthLabels');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let lastMonth = -1;
+  labels.innerHTML = cols.map(col => {
+    const m = new Date(col[0]).getMonth();
+    if (m !== lastMonth) { lastMonth = m; return `<div class="cal-month-lbl" style="width:${col.length * 17}px">${months[m]}</div>`; }
+    return `<div style="width:${col.length * 17}px"></div>`;
   }).join('');
 }
 
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+
+var dayEvents   = [];
+var selectedDay = null;
+
 function onCalClick(date) {
-  // Deselect previous
-  document.querySelectorAll('.cal-cell.selected').forEach(c=>c.classList.remove('selected'));
-  // Select clicked
+  document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
   const cell = document.querySelector(`.cal-cell[data-date="${date}"]`);
   if (cell) cell.classList.add('selected');
   showDayTransactions(date);
 }
 
-document.getElementById('metricsModal').addEventListener('click',function(e){
-  if (e.target===this) closeMetrics();
+// Show transactions for a specific date AND update summary cards to match that day
+function showDayTransactions(date, label) {
+  selectedDay = date;
+  dayEvents   = allEvents.filter(e => e.recorded_at && e.recorded_at.startsWith(date));
+
+  // Update summary cards to reflect this specific day only
+  updateSummaryCards(dayEvents);
+
+  const title = label || formatDateLabel(date);
+  document.getElementById('dayTxTitle').textContent  = 'Transactions · ' + title;
+  document.getElementById('dayTxPanel').style.display = '';
+
+  // Reset source filter to All
+  document.querySelectorAll('.src-tab').forEach(b => b.classList.remove('active'));
+  const allBtn = document.getElementById('stAll');
+  if (allBtn) allBtn.classList.add('active');
+  renderDayTxTable(dayEvents);
+
+  document.getElementById('dayTxPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeDayTx() {
+  document.getElementById('dayTxPanel').style.display = 'none';
+  document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
+  selectedDay = null;
+  // Reset summary cards to the full period totals
+  updateSummaryCards(allEvents);
+}
+
+function filterDayTx(src, btn) {
+  document.querySelectorAll('.src-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = src === 'all' ? dayEvents : dayEvents.filter(e => e.source === src);
+  renderDayTxTable(filtered);
+}
+
+function renderDayTxTable(events) {
+  const tbody  = document.getElementById('dayTxBody');
+  const pLabel = { '1day':'1 Day', '1week':'1 Week', '1month':'1 Month' };
+  if (!events.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No transactions for this date</td></tr>';
+    document.getElementById('dayTxFooter').textContent = '';
+    return;
+  }
+  tbody.innerHTML = events.map(e => {
+    const isMM  = e.source === 'mobile_money';
+    const badge = isMM
+      ? '<span class="badge" style="background:rgba(255,200,0,.12);color:#ffc800">📱 Mobile</span>'
+      : '<span class="badge" style="background:rgba(167,139,250,.12);color:#a78bfa">🎟 Cash</span>';
+    const time  = e.recorded_at ? e.recorded_at.slice(11, 16) : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${time}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)">${e.code}</td>
+      <td>${pLabel[e.profile] || e.profile}</td>
+      <td>${badge}</td>
+      <td style="color:var(--muted);font-size:.8rem">${ugx(e.gross_ugx)}</td>
+      <td style="color:var(--teal);font-weight:600;font-size:.8rem">${ugx(e.net_ugx)}</td>
+    </tr>`;
+  }).join('');
+  const net   = events.reduce((s, e) => s + (e.net_ugx   || 0), 0);
+  const gross = events.reduce((s, e) => s + (e.gross_ugx  || 0), 0);
+  document.getElementById('dayTxFooter').textContent =
+    `${events.length} transaction${events.length !== 1 ? 's' : ''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
+}
+
+// Close modal on backdrop click
+document.getElementById('metricsModal').addEventListener('click', function(e) {
+  if (e.target === this) closeMetrics();
 });
 
 // ── Auto-refresh active sessions every 30s ───────────────────────────────────
