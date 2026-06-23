@@ -6,7 +6,7 @@ const dgram  = require('dgram');
 const radius = require('radius');
 const db     = require('./db');
 
-const ROUTER_HOST = '192.168.88.1';
+const ROUTER_HOST = '10.0.0.2';
 const ROUTER_USER = 'melvin';
 const ROUTER_PASS = 'admin';
 

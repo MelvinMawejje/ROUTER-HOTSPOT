@@ -14,7 +14,7 @@ const IOTEC_CLIENT_SECRET = 'IO-NJs73yg0NVd6vMSOFaLn3a2NPDeXYUmnD';
 const IOTEC_WALLET_ID     = '019e9c6e-0cfe-76b6-87b0-d94d7b547626';
 
 // ─── MikroTik router credentials ──────────────────────────────
-const ROUTER_HOST = '192.168.88.1';
+const ROUTER_HOST = '10.0.0.2';
 const ROUTER_USER = 'melvin';
 const ROUTER_PASS = 'admin';
 
