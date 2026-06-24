@@ -44,6 +44,16 @@ async function getMacFromIp(clientIp) {
   return lease ? lease['mac-address'] : null;
 }
 
+app.get('/api/mac/check', (req, res) => {
+  const mac = (req.query.mac || '').toUpperCase();
+  if (!mac) return res.json({ found: false });
+  const voucher = db.getVoucherByMac(mac);
+  if (voucher && !voucher.disabled && voucher.remaining_seconds > 0) {
+    return res.json({ found: true, code: voucher.code });
+  }
+  res.json({ found: false });
+});
+
 // ─── Voucher redemption endpoint ─────────────────────────────────────────────
 // Validates against our SQLite database (covers both admin-generated vouchers
 // and payment-created ones). RADIUS then handles the actual MikroTik auth.
