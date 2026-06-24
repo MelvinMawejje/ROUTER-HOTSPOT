@@ -4,8 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>MBUYA WIFI – Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
-<style>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;defs&gt;&lt;linearGradient id='g' x1='0' y1='0' x2='1' y2='1'&gt;&lt;stop offset='0%' stop-color='%23ff5252'/&gt;&lt;stop offset='100%' stop-color='%23b71c1c'/&gt;&lt;/linearGradient&gt;&lt;filter id='glow' x='-50%' y='-50%' width='200%' height='200%'&gt;&lt;feGaussianBlur stdDeviation='2.5' result='blur'/&gt;&lt;feMerge&gt;&lt;feMergeNode in='blur'/&gt;&lt;feMergeNode in='SourceGraphic'/&gt;&lt;/feMerge&gt;&lt;/filter&gt;&lt;/defs&gt;&lt;circle cx='50' cy='50' r='50' fill='%230d1f3c'/&gt;&lt;g stroke='url(%23g)' fill='none' stroke-linecap='round' filter='url(%23glow)'&gt;&lt;path d='M18 38c17.7-17.7 46.3-17.7 64 0' stroke-width='8'/&gt;&lt;path d='M28 50c11.6-11.6 32.4-11.6 44 0' stroke-width='8' opacity='.85'/&gt;&lt;path d='M38 62c6.1-6.1 17.9-6.1 24 0' stroke-width='8' opacity='.7'/&gt;&lt;/g&gt;&lt;circle cx='50' cy='74' r='5' fill='url(%23g)' filter='url(%23glow)'/&gt;&lt;/svg&gt;"><style>
 :root{--teal:#00c6b2;--teal-d:#009e8e;--navy:#0a1628;--card-bg:#0d1f3c;--input-bg:#091529;--border:rgba(0,198,178,0.25);--muted:rgba(255,255,255,0.45);--white:#f0faff;--red:#ff6b6b}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--navy);min-height:100vh;color:var(--white);padding:24px 16px}
@@ -176,7 +175,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
     <button class="btn btn-teal" onclick="generateVouchers()">Generate Vouchers</button>
   </div>
 
-  <!-- Voucher table -->
+  <!-- Voucher table 
   <div class="card">
     <div class="card-title">All Vouchers</div>
     <div class="filters">
@@ -205,7 +204,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
     </div>
     <div id="tableFooter" style="margin-top:10px;font-size:.75rem;color:var(--muted)"></div>
   </div>
-</div>
+  -->
 
 <!-- Active sessions -->
 <div class="card" style="margin-top:16px">
@@ -216,8 +215,9 @@ tr:hover td{background:rgba(0,198,178,.03)}
       <tbody id="sessionTable"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
     </table>
   </div>
+  </div>
+  </div><!-- /no-print -->
 </div>
-</div><!-- /no-print -->
 
 <!-- Print area: voucher cards -->
 <div class="voucher-preview" id="printArea"></div>
