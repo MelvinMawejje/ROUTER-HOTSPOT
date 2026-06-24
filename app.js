@@ -250,7 +250,7 @@ window.logoutSession = async function() {
 
   // Redirect to MikroTik's hotspot logout endpoint, which clears the network session,
   // then bounce back to our portal.
-  window.location.href = `http://192.168.88.1/logout?dst=${encodeURIComponent(window.location.origin + '/')}`;
+  window.location.href = `http://10.0.0.2/logout?dst=${encodeURIComponent(window.location.origin + '/')}`;
 };
 
 // ─── Util: parse MikroTik duration string (e.g. "2d3h15m40s") ────────────────

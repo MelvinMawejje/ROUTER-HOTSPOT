@@ -78,7 +78,7 @@ var MT_IP        = '$(ip)';
 var MT_DST       = '$(link-orig)';
 
 // ── Your Node.js API server IP and port ──────────────────────────────────────
-// Change this to your Windows PC's LAN IP (find it with ipconfig)
+// Change this to your VULTR PC's LAN IP (find it with ipconfig)
 var API_BASE = 'http://139.84.226.141:3000';
 
 var PKG_AMOUNTS = { '1day': 1000, '1week': 5000, '1month': 20000 };
@@ -277,7 +277,7 @@ function doLogout() {
   .finally(function() {
     clearInterval(dashTimer);
     // Hit MikroTik's logout URL to clear the network session
-    window.location.href = 'http://192.168.88.1/logout?dst=' + encodeURIComponent(API_BASE + '/');
+    window.location.href = 'http://10.0.0.2/logout?dst=' + encodeURIComponent(API_BASE + '/');
   });
 }
 
@@ -327,7 +327,7 @@ function fmtDur(str) {
 
   <div class="section-label">🎟 Voucher Code</div>
   <p style="color:var(--muted);font-size:.82rem;margin-bottom:12px;">Enter your voucher code to connect instantly.</p>
-  <input type="text" id="voucherInput" placeholder="e.g. MBUYA-XXXX-XXXX" maxlength="40" autocomplete="off"
+  <input type="text" id="voucherInput" placeholder="VOUCHER" maxlength="40" autocomplete="off"
     style="letter-spacing:.08em;" onkeydown="if(event.key==='Enter') submitVoucher()"/>
   <button id="voucherBtn" class="btn btn-teal" onclick="submitVoucher()">Connect with Voucher</button>
 
