@@ -215,6 +215,17 @@ module.exports = {
       WHERE recorded_at >= datetime('now', '-${days} days')
     `).get();
 
-    return { rows, totals: totals || { gross:0, net:0, count:0, mm_net:0, v_net:0 } };
+    const events = db.prepare(`
+      SELECT code, profile, source, gross_ugx, net_ugx, recorded_at
+      FROM revenue_events
+      WHERE recorded_at >= datetime('now', '-${days} days')
+      ORDER BY recorded_at ASC
+    `).all();
+
+    return {
+      rows,
+      totals: totals || { gross:0, net:0, count:0, mm_net:0, v_net:0 },
+      events,
+    };
   },
 };

@@ -244,19 +244,21 @@ tr:hover td{background:rgba(0,198,178,.03)}
       </div>
 
       <!-- Calendar heatmap -->
-      <div class="card-title" style="margin-bottom:10px">Daily Revenue Calendar</div>
-      <div class="cal-wrap">
-        <div class="cal-month-labels" id="calMonthLabels"></div>
-        <div class="cal-grid" id="calGrid"></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.7rem;color:var(--muted)">
-        <span>Less</span>
-        <div style="width:12px;height:12px;border-radius:2px;background:rgba(255,255,255,.06)"></div>
-        <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.2)"></div>
-        <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.45)"></div>
-        <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.7)"></div>
-        <div style="width:12px;height:12px;border-radius:2px;background:#00c6b2"></div>
-        <span>More</span>
+      <div id="calSection">
+        <div class="card-title" style="margin-bottom:10px">Daily Revenue Calendar</div>
+        <div class="cal-wrap">
+          <div class="cal-month-labels" id="calMonthLabels"></div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.7rem;color:var(--muted)">
+          <span>Less</span>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(255,255,255,.06)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.2)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.45)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.7)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:#00c6b2"></div>
+          <span>More</span>
+        </div>
       </div>
 
       <!-- Day transaction panel — populated when a date is clicked or Today is selected -->
