@@ -15,15 +15,15 @@ db.exec(`
     used_seconds      INTEGER NOT NULL DEFAULT 0,
     first_used_at     TEXT,
     expires_at        TEXT,
-    created_at        TEXT    DEFAULT (datetime('now')),
+    created_at        TEXT    DEFAULT (datetime('now', '+3 hours')),
     disabled          INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
     session_id      TEXT PRIMARY KEY,
     code            TEXT NOT NULL,
-    started_at      TEXT DEFAULT (datetime('now')),
-    last_update     TEXT DEFAULT (datetime('now')),
+    started_at      TEXT DEFAULT (datetime('now', '+3 hours')),
+    last_update     TEXT DEFAULT (datetime('now', '+3 hours')),
     session_seconds INTEGER NOT NULL DEFAULT 0
   );
 
@@ -34,7 +34,7 @@ db.exec(`
     source      TEXT    NOT NULL,
     gross_ugx   INTEGER NOT NULL,
     net_ugx     INTEGER NOT NULL,
-    recorded_at TEXT    DEFAULT (datetime('now'))
+    recorded_at TEXT    DEFAULT (datetime('now', '+3 hours'))
   );
 `);
 
@@ -50,13 +50,13 @@ try { db.exec(`
     source      TEXT    NOT NULL,
     gross_ugx   INTEGER NOT NULL,
     net_ugx     INTEGER NOT NULL,
-    recorded_at TEXT    DEFAULT (datetime('now'))
+    recorded_at TEXT    DEFAULT (datetime('now', '+3 hours'))
   )
 `); } catch(e) {}
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS mac_bindings (
     mac TEXT PRIMARY KEY, code TEXT NOT NULL,
-    bound_at TEXT DEFAULT (datetime('now'))
+    bound_at TEXT DEFAULT (datetime('now', '+3 hours'))
   )
 `); } catch(e) {}
 
@@ -89,7 +89,9 @@ module.exports = {
 
     let remaining_seconds;
     if (row.expires_at) {
-      const expiresMs = new Date(row.expires_at).getTime();
+      // expires_at is stored as EAT (UTC+3), so parse it as UTC+3
+      const eatStr   = row.expires_at.replace(' ', 'T') + '+03:00';
+      const expiresMs = new Date(eatStr).getTime();
       remaining_seconds = Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
     } else {
       // Not yet activated — full allocation available
@@ -118,7 +120,7 @@ module.exports = {
     if (!mac || !code) return;
     db.prepare(`
       INSERT OR REPLACE INTO mac_bindings (mac, code, bound_at)
-      VALUES (?, ?, datetime('now'))
+      VALUES (?, ?, datetime('now', '+3 hours'))
     `).run(mac.toUpperCase(), code);
     console.log(`[DB] MAC ${mac.toUpperCase()} bound to ${code}`);
   },
@@ -132,15 +134,17 @@ module.exports = {
     if (voucher && !voucher.first_used_at) {
       const now       = new Date();
       const expiresAt = new Date(now.getTime() + voucher.allocated_seconds * 1000);
+      // Store as EAT (UTC+3) to match all other timestamps in the DB
+      const toEAT = d => new Date(d.getTime() + 3 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19);
       db.prepare(`UPDATE vouchers SET first_used_at = ?, expires_at = ? WHERE code = ?`)
-        .run(now.toISOString(), expiresAt.toISOString(), code);
-      console.log(`[DB] Voucher ${code} activated — expires ${expiresAt.toISOString()}`);
+        .run(toEAT(now), toEAT(expiresAt), code);
+      console.log(`[DB] Voucher ${code} activated — expires ${toEAT(expiresAt)} EAT`);
     }
 
     db.prepare(`
       INSERT OR REPLACE INTO sessions
         (session_id, code, started_at, last_update, session_seconds)
-      VALUES (?, ?, datetime('now'), datetime('now'), 0)
+      VALUES (?, ?, datetime('now', '+3 hours'), datetime('now', '+3 hours'), 0)
     `).run(sessionId, code);
   },
 
@@ -153,7 +157,7 @@ module.exports = {
     if (delta <= 0) return;
     db.prepare(`UPDATE vouchers SET used_seconds = used_seconds + ? WHERE code = ?`)
       .run(delta, sess.code);
-    db.prepare(`UPDATE sessions SET session_seconds = ?, last_update = datetime('now') WHERE session_id = ?`)
+    db.prepare(`UPDATE sessions SET session_seconds = ?, last_update = datetime('now', '+3 hours') WHERE session_id = ?`)
       .run(cumulativeSeconds, sessionId);
   },
 
@@ -168,7 +172,7 @@ module.exports = {
   // Prevents them from appearing in the next print batch.
   markPrinted(codes) {
     const stmt = db.prepare(
-      `UPDATE vouchers SET printed_at = datetime('now') WHERE code = ? AND printed_at IS NULL`
+      `UPDATE vouchers SET printed_at = datetime('now', '+3 hours') WHERE code = ? AND printed_at IS NULL`
     );
     const run = db.transaction(() => codes.forEach(c => stmt.run(c)));
     run();
@@ -199,7 +203,7 @@ module.exports = {
         SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
         SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '-${days} days')
+      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
       GROUP BY date(recorded_at)
       ORDER BY day ASC
     `).all();
@@ -212,13 +216,13 @@ module.exports = {
         SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
         SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '-${days} days')
+      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
     `).get();
 
     const events = db.prepare(`
       SELECT code, profile, source, gross_ugx, net_ugx, recorded_at
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '-${days} days')
+      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
       ORDER BY recorded_at ASC
     `).all();
 
