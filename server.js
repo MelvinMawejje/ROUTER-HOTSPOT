@@ -11,7 +11,7 @@ app.use(express.static('.'));  // serves your index.html, app.js, style.css
 
 const IOTEC_CLIENT_ID     = 'pay-019e9c6e-0cda-775d-b88e-40687853599c';
 const IOTEC_CLIENT_SECRET = 'IO-NJs73yg0NVd6vMSOFaLn3a2NPDeXYUmnD';
-const IOTEC_WALLET_ID     = '019e9c6e-0cfe-76b6-87b0-d94d7b547626';
+const IOTEC_WALLET_ID     = '019ed5d9-2653-7521-9ede-b99f59001c9e';
 
 // ─── MikroTik router credentials ──────────────────────────────
 const ROUTER_HOST = '10.0.0.2';
