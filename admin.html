@@ -175,49 +175,19 @@ tr:hover td{background:rgba(0,198,178,.03)}
     <button class="btn btn-teal" onclick="generateVouchers()">Generate Vouchers</button>
   </div>
 
-  <!-- Voucher table 
+  <!-- Active sessions (replaces the All Vouchers panel as the right column) -->
   <div class="card">
-    <div class="card-title">All Vouchers</div>
-    <div class="filters">
-      <select id="filterProfile" onchange="filterTable()">
-        <option value="">All packages</option>
-        <option value="mini-day">4 Hours</option>
-        <option value="1day">1 Day</option>
-        <option value="1week">1 Week</option>
-        <option value="1month">1 Month</option>
-      </select>
-      <select id="filterStatus" onchange="filterTable()">
-        <option value="">All statuses</option>
-        <option value="unused">Unused</option>
-        <option value="used">Partially used</option>
-        <option value="expired">Expired</option>
-      </select>
-      <input type="text" id="filterSearch" placeholder="Search code…" oninput="filterTable()"/>
-    </div>
+    <div class="card-title">Live Sessions</div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
-          <th>Code</th><th>Package</th><th>Usage</th><th>Status</th><th></th>
-        </tr></thead>
-        <tbody id="voucherTable"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
+        <thead><tr><th>Voucher</th><th>Uptime</th><th>Time Remaining</th><th>IP Address</th><th></th></tr></thead>
+        <tbody id="sessionTable"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
       </table>
     </div>
-    <div id="tableFooter" style="margin-top:10px;font-size:.75rem;color:var(--muted)"></div>
   </div>
-  -->
 
-<!-- Active sessions -->
-<div class="card" style="margin-top:16px">
-  <div class="card-title">Live Sessions</div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Voucher</th><th>Uptime</th><th>Time Remaining</th><th>IP Address</th><th></th></tr></thead>
-      <tbody id="sessionTable"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
-    </table>
-  </div>
-  </div>
-  </div><!-- /no-print -->
-</div>
+</div><!-- /two-column grid -->
+</div><!-- /no-print -->
 
 <!-- Print area: voucher cards -->
 <div class="voucher-preview" id="printArea"></div>
@@ -351,6 +321,7 @@ function renderStats(rows) {
 }
 
 function filterTable() {
+  if (!document.getElementById('filterProfile')) return; // voucher table hidden
   const profile = document.getElementById('filterProfile').value;
   const status  = document.getElementById('filterStatus').value;
   const search  = document.getElementById('filterSearch').value.trim().toLowerCase();
@@ -371,9 +342,11 @@ function filterTable() {
 
 function renderTable(rows) {
   const tbody = document.getElementById('voucherTable');
+  if (!tbody) return; // voucher table is hidden — nothing to render
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No vouchers found</td></tr>';
-    document.getElementById('tableFooter').textContent = '';
+    const footer = document.getElementById('tableFooter');
+    if (footer) footer.textContent = '';
     return;
   }
 
@@ -400,7 +373,7 @@ function renderTable(rows) {
     </tr>`;
   }).join('');
 
-  document.getElementById('tableFooter').textContent = `Showing ${rows.length} of ${allVouchers.length} vouchers`;
+  document.getElementById('tableFooter') && (document.getElementById('tableFooter').textContent = `Showing ${rows.length} of ${allVouchers.length} vouchers`);
 }
 
 var pendingPrintCodes = [];  // tracks codes in the current print batch
