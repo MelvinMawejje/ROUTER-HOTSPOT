@@ -45,11 +45,11 @@ async function createHotspotUser(mac, code, remainingSeconds) {
 
     if (existing) {
       // Update existing user with PATCH
-      const updateUrl = `${baseUrl}/${existing['.id']}`;
+      //const updateUrl = `${baseUrl}/${existing['.id']}`;
       const resp = await fetch(updateUrl, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify(body),
+        body: JSON.stringify({disabled: false}),
       });
       if (!resp.ok) {
         const text = await resp.text();
