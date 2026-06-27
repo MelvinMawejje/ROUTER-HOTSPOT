@@ -16,53 +16,49 @@ const ACCT_PORT        = 1813;
 const IDLE_TIMEOUT_SEC = 300;
 
 // ── Helper: create or update hotspot user ──────────────────────
-// On FIRST login: create the user with the full remaining limit-uptime.
-// On RE-LOGIN:    only re-enable the user — do NOT reset limit-uptime,
-//                 because MikroTik is already counting it down correctly.
 async function createHotspotUser(mac, code, remainingSeconds) {
   if (remainingSeconds <= 0) {
     console.log(`[REST] Skipping user ${mac} – remaining time 0`);
     return;
   }
   const baseUrl = `http://${ROUTER_HOST}/rest/ip/hotspot/user`;
-  const auth    = 'Basic ' + Buffer.from(`${ROUTER_USER}:${ROUTER_PASS}`).toString('base64');
+  const auth = 'Basic ' + Buffer.from(`${ROUTER_USER}:${ROUTER_PASS}`).toString('base64');
   const headers = { 'Authorization': auth, 'Content-Type': 'application/json' };
 
   try {
-    // 1. Find if user already exists
+    // 1. List existing users
     const listResp = await fetch(baseUrl, { headers });
     if (!listResp.ok) {
       console.error(`[REST] Failed to list users: ${listResp.status}`);
       return;
     }
-    const users    = await listResp.json();
+    const users = await listResp.json();
     const existing = users.find(u => u.name === mac);
 
+    const body = {
+      name: mac,
+      password: '',
+      profile: 'default',                     // Change to your hotspot profile if needed
+      'limit-uptime': `${Math.floor(remainingSeconds)}s`,
+      disabled: false,
+    };
+
     if (existing) {
-      // ── Re-login: just re-enable, never touch limit-uptime ──────
-      // MikroTik tracks the countdown itself; resetting it here is
-      // what caused the "expires at 16:00 instead of 12:10" bug.
+      // Update existing user with PATCH
       const updateUrl = `${baseUrl}/${existing['.id']}`;
       const resp = await fetch(updateUrl, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ disabled: false }),
+        body: JSON.stringify(body),
       });
       if (!resp.ok) {
         const text = await resp.text();
-        console.error(`[REST] Failed to re-enable user ${mac}: ${resp.status} - ${text}`);
+        console.error(`[REST] Failed to update user ${mac}: ${resp.status} - ${text}`);
       } else {
-        console.log(`[REST] Re-enabled hotspot user ${mac} (limit-uptime unchanged)`);
+        console.log(`[REST] Updated hotspot user for MAC ${mac} (limit: ${remainingSeconds}s)`);
       }
     } else {
-      // ── First login: create with full remaining time ─────────────
-      const body = {
-        name:           mac,
-        password:       '',
-        profile:        'default',
-        'limit-uptime': `${Math.floor(remainingSeconds)}s`,
-        disabled:       false,
-      };
+      // Create new user with PUT
       const resp = await fetch(baseUrl, {
         method: 'PUT',
         headers,
@@ -72,7 +68,7 @@ async function createHotspotUser(mac, code, remainingSeconds) {
         const text = await resp.text();
         console.error(`[REST] Failed to create user ${mac}: ${resp.status} - ${text}`);
       } else {
-        console.log(`[REST] Created hotspot user ${mac} (limit-uptime: ${remainingSeconds}s)`);
+        console.log(`[REST] Created hotspot user for MAC ${mac} (limit: ${remainingSeconds}s)`);
       }
     }
   } catch (e) {
