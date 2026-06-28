@@ -209,6 +209,15 @@ acctServer.on('message', (msg, rinfo) => {
       db.updateSession(sessionId, sessionSecs);
     } else if (statusType === 'Stop') {
       db.stopSession(sessionId, sessionSecs);
+        // Re-sync the hotspot user's limit-uptime so seamless reconnect works
+        if (clientMac) {
+          const voucher = db.getVoucher(username);
+          if (voucher && voucher.remaining_seconds > 0) {
+            await createHotspotUser(clientMac, username, voucher.remaining_seconds);
+          } else if (voucher && voucher.remaining_seconds <= 0) {
+            await disableHotspotUser(clientMac);
+          }
+        }
     }
 
     const resp = radius.encode_response({
