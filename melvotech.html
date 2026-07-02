@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MBUYA WIFI – Admin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;defs&gt;&lt;linearGradient id='g' x1='0' y1='0' x2='1' y2='1'&gt;&lt;stop offset='0%' stop-color='%23ff5252'/&gt;&lt;stop offset='100%' stop-color='%23b71c1c'/&gt;&lt;/linearGradient&gt;&lt;filter id='glow' x='-50%' y='-50%' width='200%' height='200%'&gt;&lt;feGaussianBlur stdDeviation='2.5' result='blur'/&gt;&lt;feMerge&gt;&lt;feMergeNode in='blur'/&gt;&lt;feMergeNode in='SourceGraphic'/&gt;&lt;/feMerge&gt;&lt;/filter&gt;&lt;/defs&gt;&lt;circle cx='50' cy='50' r='50' fill='%230d1f3c'/&gt;&lt;g stroke='url(%23g)' fill='none' stroke-linecap='round' filter='url(%23glow)'&gt;&lt;path d='M18 38c17.7-17.7 46.3-17.7 64 0' stroke-width='8'/&gt;&lt;path d='M28 50c11.6-11.6 32.4-11.6 44 0' stroke-width='8' opacity='.85'/&gt;&lt;path d='M38 62c6.1-6.1 17.9-6.1 24 0' stroke-width='8' opacity='.7'/&gt;&lt;/g&gt;&lt;circle cx='50' cy='74' r='5' fill='url(%23g)' filter='url(%23glow)'/&gt;&lt;/svg&gt;"><style>
+:root{--teal:#00c6b2;--teal-d:#009e8e;--navy:#0a1628;--card-bg:#0d1f3c;--input-bg:#091529;--border:rgba(0,198,178,0.25);--muted:rgba(255,255,255,0.45);--white:#f0faff;--red:#ff6b6b}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--navy);min-height:100vh;color:var(--white);padding:24px 16px}
+h1{font-family:'Syne',sans-serif;font-weight:800;font-size:1.6rem;color:var(--white);margin-bottom:4px}
+h1 span{color:var(--teal)}
+.sub{color:var(--muted);font-size:.85rem;margin-bottom:28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:28px}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:20px}
+.card-title{font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin-bottom:14px}
+.stat-value{font-family:'Syne',sans-serif;font-weight:800;font-size:2rem;color:var(--white)}
+.stat-label{font-size:.8rem;color:var(--muted);margin-top:2px}
+label{display:block;font-size:.75rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:6px;margin-top:14px}
+label:first-of-type{margin-top:0}
+select,input[type=number],input[type=text],input[type=password]{width:100%;background:var(--input-bg);border:1.5px solid var(--border);color:var(--white);border-radius:8px;padding:10px 12px;font-size:.9rem;font-family:'DM Sans',sans-serif;outline:none}
+select:focus,input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,198,178,.15)}
+select option{background:#0d1f3c}
+.btn{border:none;border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:.88rem;letter-spacing:.04em;padding:11px 18px;cursor:pointer;transition:background .2s,transform .15s}
+.btn-teal{background:var(--teal);color:var(--navy);width:100%;margin-top:14px}
+.btn-teal:hover{background:var(--teal-d)}
+.btn-teal:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:6px 12px;font-size:.75rem;border-radius:6px}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--muted)}
+.btn-outline:hover{border-color:var(--teal);color:var(--teal)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#e55}
+/* Table */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid rgba(0,198,178,.08);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(0,198,178,.03)}
+.badge{display:inline-block;padding:3px 9px;border-radius:50px;font-size:.7rem;font-weight:700;font-family:'Syne',sans-serif;letter-spacing:.05em}
+.badge-active{background:rgba(0,198,178,.15);color:var(--teal)}
+.badge-used{background:rgba(255,107,107,.15);color:var(--red)}
+.badge-unused{background:rgba(255,255,255,.08);color:var(--muted)}
+.badge-used{background:rgba(255,200,0,.12);color:#ffc800}
+.progress{height:4px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;margin-top:4px;min-width:80px}
+.progress-fill{height:100%;border-radius:4px;background:var(--teal);transition:width .3s}
+/* Print voucher cards */
+.voucher-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:14px}
+.v-card{border:1.5px dashed var(--border);border-radius:10px;padding:14px;text-align:center;background:var(--input-bg)}
+.v-card .vc-title{font-family:'Syne',sans-serif;font-weight:800;font-size:.8rem;color:var(--teal);letter-spacing:.08em;margin-bottom:6px}
+.v-card .vc-code{font-family:monospace;font-size:1rem;color:var(--white);letter-spacing:.12em;word-break:break-all;margin-bottom:6px}
+.v-card .vc-profile{font-size:.72rem;color:var(--muted)}
+/* Filters */
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filters select,.filters input{width:auto;flex:1;min-width:120px}
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--teal);color:var(--navy);font-family:'Syne',sans-serif;font-weight:700;padding:12px 24px;border-radius:50px;font-size:.88rem;opacity:0;transition:opacity .3s,transform .3s;z-index:999;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* Metrics modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;display:none;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)}
+.modal-overlay.open{display:flex}
+.metrics-box{background:var(--card-bg);border:1px solid var(--border);border-radius:20px;padding:28px;width:100%;max-width:720px;max-height:90vh;overflow-y:auto;animation:slideUp .35s cubic-bezier(.22,.68,0,1.2)}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.pin-box{max-width:320px;margin:0 auto;text-align:center;padding:20px 0}
+.pin-input{font-size:1.6rem;letter-spacing:.5em;text-align:center;width:100%;background:var(--input-bg);border:1.5px solid var(--border);color:var(--white);border-radius:10px;padding:14px}
+.period-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.period-tab{background:var(--input-bg);border:1.5px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 16px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.06em;transition:all .2s}
+.period-tab.active{background:rgba(0,198,178,.12);border-color:var(--teal);color:var(--teal)}
+.rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.rev-card{background:var(--input-bg);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+.rev-card .rc-val{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;color:var(--teal)}
+.rev-card .rc-lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+/* Calendar heatmap */
+.cal-wrap{overflow-x:auto;margin-bottom:8px}
+.cal-grid{display:flex;gap:3px;min-width:fit-content}
+.cal-col{display:flex;flex-direction:column;gap:3px}
+.cal-cell{width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.06);cursor:pointer;position:relative;transition:transform .1s}
+.cal-cell:hover{transform:scale(1.3);z-index:10}
+.cal-cell[data-v]:hover::after{content:attr(data-v);position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#0d1f3c;border:1px solid var(--border);color:var(--white);font-size:.7rem;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:20}
+.cal-month-labels{display:flex;gap:3px;margin-bottom:4px;min-width:fit-content}
+.cal-month-lbl{font-size:.62rem;color:var(--muted);font-family:'Syne',sans-serif}
+@media print {
+  body {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  /* Hide everything except the print area */
+  .no-print,
+  .toast,
+  .modal-overlay,
+  .grid,
+  .card,
+  .table-wrap,
+  #statsRow,
+  #voucherTable,
+  #sessionTable {
+    display: none !important;
+  }
+  /* Show the print area as a clean grid */
+  .voucher-preview {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    padding: 20px;
+    width: 100%;
+  }
+  .v-card {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    break-inside: avoid;
+  }
+  .v-card .vc-title {
+    color: #009e8e !important;
+  }
+  .v-card .vc-code {
+    color: #000 !important;
+  }
+  .v-card .vc-profile {
+    color: #666 !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="no-print">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px">
+  <h1>MBUYA <span>WIFI</span> Admin</h1>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-outline btn-sm" onclick="loadAll()">↻ Refresh</button>
+    <button class="btn btn-sm btn-teal" style="width:auto;margin-top:0" onclick="printVouchers()">🖨 Print Vouchers</button>
+    <button class="btn btn-sm btn-outline" style="margin-top:0;border-color:rgba(255,200,0,.4);color:#ffc800" onclick="openMetrics()">📊 Metrics</button>
+  </div>
+</div>
+<p class="sub">Voucher management &amp; session overview</p>
+
+<!-- Stats row -->
+<div class="grid" id="statsRow">
+  <div class="card"><div class="card-title">Total Vouchers</div><div class="stat-value" id="statTotal">—</div><div class="stat-label">in database</div></div>
+  <div class="card"><div class="card-title">Currently Active</div><div class="stat-value" id="statActive" style="color:var(--teal)">—</div><div class="stat-label">online right now</div></div>
+  <div class="card"><div class="card-title">Unused</div><div class="stat-value" id="statUnused">—</div><div class="stat-label">never connected</div></div>
+  <div class="card"><div class="card-title">Expired</div><div class="stat-value" id="statExpired" style="color:var(--red)">—</div><div class="stat-label">fully used / disabled</div></div>
+</div>
+
+<!-- Two column layout -->
+<div class="grid" style="grid-template-columns:1fr 1.8fr;align-items:start">
+
+  <!-- Generate panel -->
+  <div class="card">
+    <div class="card-title">Generate Vouchers</div>
+    <label>Package</label>
+    <select id="genProfile">
+      <option value="mini-day">4 Hours / Mini-Day (UGX 500)</option>
+      <option value="1day">1 Day (UGX 1,000)</option>
+      <option value="1week">1 Week (UGX 5,000)</option>
+      <option value="1month">1 Month (UGX 20,000)</option>
+    </select>
+    <label>Voucher Type</label>
+    <select id="genType">
+      <option value="numeric">Numeric only (e.g. 48291736)</option>
+      <option value="alphanumeric">Alphanumeric (e.g. A3F7K9X2)</option>
+    </select>
+    <label>Code Length</label>
+    <select id="genLength">
+      <option value="8">8 characters</option>
+      <option value="10">10 characters</option>
+      <option value="12">12 characters</option>
+    </select>
+    <label>Quantity</label>
+    <input type="number" id="genQty" value="10" min="1" max="500"/>
+    <button class="btn btn-teal" onclick="generateVouchers()">Generate Vouchers</button>
+  </div>
+
+  <!-- Active sessions (replaces the All Vouchers panel as the right column) -->
+  <div class="card">
+    <div class="card-title">Live Sessions</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Voucher</th><th>Uptime</th><th>Time Remaining</th><th>IP Address</th><th></th></tr></thead>
+        <tbody id="sessionTable"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /two-column grid -->
+</div><!-- /no-print -->
+
+<!-- Print area: voucher cards -->
+<div class="voucher-preview" id="printArea"></div>
+
+<!-- Metrics modal -->
+<div class="modal-overlay" id="metricsModal">
+  <div class="metrics-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--white)">📊 Revenue Metrics</div>
+      <button class="btn btn-sm btn-outline" onclick="closeMetrics()" style="margin-top:0">✕ Close</button>
+    </div>
+
+    <!-- PIN gate -->
+    <div id="pinGate" class="pin-box">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px;letter-spacing:.06em;text-transform:uppercase">Enter Metrics PIN</div>
+      <input class="pin-input" type="password" id="metricsPin" maxlength="8" placeholder="····"
+        onkeydown="if(event.key==='Enter') checkPin()"/>
+      <button class="btn btn-teal" style="max-width:200px;margin:14px auto 0" onclick="checkPin()">View Metrics</button>
+      <div id="pinError" style="color:var(--red);font-size:.8rem;margin-top:10px;display:none">Incorrect PIN. Try again.</div>
+    </div>
+
+    <!-- Metrics content (hidden until PIN correct) -->
+    <div id="metricsContent" style="display:none">
+      <!-- Period tabs -->
+      <div class="period-tabs">
+        <button class="period-tab active" onclick="switchPeriod('day',this)">Today</button>
+        <button class="period-tab" onclick="switchPeriod('week',this)">This Week</button>
+        <button class="period-tab" onclick="switchPeriod('month',this)">This Month</button>
+        <button class="period-tab" onclick="switchPeriod('year',this)">This Year</button>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="rev-grid">
+        <div class="rev-card">
+          <div class="rc-val" id="mNetTotal">—</div>
+          <div class="rc-lbl">Net Revenue</div>
+        </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mGrossTotal">—</div>
+          <div class="rc-lbl">Gross Revenue</div>
+        </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mCount">—</div>
+          <div class="rc-lbl">Vouchers Sold</div>
+        </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mMmNet" style="color:#ffc800">—</div>
+          <div class="rc-lbl">Mobile Money (96%)</div>
+        </div>
+        <div class="rev-card">
+          <div class="rc-val" id="mVNet" style="color:#a78bfa">—</div>
+          <div class="rc-lbl">Cash Vouchers</div>
+        </div>
+      </div>
+
+      <!-- Calendar heatmap -->
+      <div id="calSection">
+        <div class="card-title" style="margin-bottom:10px">Daily Revenue Calendar</div>
+        <div class="cal-wrap">
+          <div class="cal-month-labels" id="calMonthLabels"></div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.7rem;color:var(--muted)">
+          <span>Less</span>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(255,255,255,.06)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.2)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.45)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,198,178,.7)"></div>
+          <div style="width:12px;height:12px;border-radius:2px;background:#00c6b2"></div>
+          <span>More</span>
+        </div>
+      </div>
+
+      <!-- Day transaction panel — populated when a date is clicked or Today is selected -->
+      <div class="day-tx-panel" id="dayTxPanel" style="display:none;">
+        <div class="day-tx-header">
+          <div class="day-tx-title" id="dayTxTitle">Transactions</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="src-tabs">
+              <button class="src-tab active" id="stAll"  onclick="filterDayTx('all',this)">All</button>
+              <button class="src-tab" id="stMM"   onclick="filterDayTx('mobile_money',this)" style="color:#ffc800">📱 Mobile</button>
+              <button class="src-tab" id="stCash" onclick="filterDayTx('voucher',this)" style="color:#a78bfa">🎟 Cash</button>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="closeDayTx()" style="margin:0;padding:5px 10px">✕</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Code</th><th>Package</th><th>Source</th><th>Gross</th><th>Net</th></tr></thead>
+            <tbody id="dayTxBody"></tbody>
+          </table>
+        </div>
+        <div class="tx-footer" id="dayTxFooter"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';  // same origin
+
+var allVouchers = [];
+
+// ── Load everything on start ──────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadVouchers(), loadSessions()]);
+}
+
+// ── Vouchers ──────────────────────────────────────────────────────────────────
+async function loadVouchers() {
+  try {
+    const r    = await fetch(API + '/api/admin/vouchers');
+    const data = await r.json();
+    allVouchers = data.vouchers || [];
+    renderStats(allVouchers);
+    renderTable(allVouchers);
+    renderPrintCards(allVouchers);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function renderStats(rows) {
+  const total   = rows.length;
+  const expired = rows.filter(v => v.remaining_seconds <= 0 || v.disabled).length;
+  const unused  = rows.filter(v => !v.first_used_at && !v.disabled).length;  // <-- changed
+  document.getElementById('statTotal').textContent   = total;
+  document.getElementById('statExpired').textContent = expired;
+  document.getElementById('statUnused').textContent  = unused;
+}
+
+function filterTable() {
+  if (!document.getElementById('filterProfile')) return; // voucher table hidden
+  const profile = document.getElementById('filterProfile').value;
+  const status  = document.getElementById('filterStatus').value;
+  const search  = document.getElementById('filterSearch').value.trim().toLowerCase();
+
+  const filtered = allVouchers.filter(v => {
+    if (profile && v.profile !== profile) return false;
+    if (search  && !v.code.toLowerCase().includes(search)) return false;
+    if (status) {
+      const pct = v.used_seconds / v.allocated_seconds;
+      if (status === 'unused'  && v.used_seconds > 0) return false;
+      if (status === 'used' && (!v.first_used_at || v.remaining_seconds <= 0 || v.disabled)) return false;
+      if (status === 'expired' && pct < 1 && !v.disabled) return false;
+    }
+    return true;
+  });
+  renderTable(filtered);
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('voucherTable');
+  if (!tbody) return; // voucher table is hidden — nothing to render
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No vouchers found</td></tr>';
+    const footer = document.getElementById('tableFooter');
+    if (footer) footer.textContent = '';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(v => {
+    const rem  = fmtSec(v.remaining_seconds);
+    const profileLabel = { 'mini-day':'4 Hours','1day':'1 Day','1week':'1 Week','1month':'1 Month' }[v.profile] || v.profile;
+
+      let badge;
+      if (v.disabled)                        badge = '<span class="badge badge-used">Disabled</span>';
+      else if (v.remaining_seconds <= 0)     badge = '<span class="badge badge-used">Expired</span>';
+      else if (v.first_used_at)              badge = '<span class="badge badge-partial">Used</span>';   // re-use the same style, just change text
+      else                                   badge = '<span class="badge badge-unused">Unused</span>';
+    return `<tr>
+      <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${v.code}</td>
+      <td>${profileLabel}</td>
+      <td style="font-size:.78rem;color:var(--muted)">${rem} remaining</td>
+      <td>${badge}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-outline" onclick="copyCode('${v.code}')" title="Copy">📋</button>
+        ${!v.disabled && v.remaining_seconds > 0
+          ? `<button class="btn btn-sm btn-danger" style="margin-left:4px" onclick="disableVoucher('${v.code}')">✕</button>`
+          : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tableFooter') && (document.getElementById('tableFooter').textContent = `Showing ${rows.length} of ${allVouchers.length} vouchers`);
+}
+
+var pendingPrintCodes = [];  // tracks codes in the current print batch
+
+function renderPrintCards(rows) {
+  const profileLabel = { 'mini-day':'4 Hours – UGX 500','1day':'1 Day – UGX 1,000','1week':'1 Week – UGX 5,000','1month':'1 Month – UGX 20,000' };
+  // Only show vouchers that are: not disabled, never used, and never printed before
+  const printable = rows.filter(v => !v.disabled && !v.first_used_at && !v.printed_at);
+  pendingPrintCodes = printable.map(v => v.code);
+
+  if (!printable.length) {
+    document.getElementById('printArea').innerHTML =
+      '<p style="font-family:sans-serif;color:#666;padding:20px;">No unprinted unused vouchers available.</p>';
+    return;
+  }
+
+  document.getElementById('printArea').innerHTML = printable.map(v => `
+    <div class="v-card">
+      <div class="vc-title">🌐 MBUYA WIFI</div>
+      <div class="vc-code">${v.code}</div>
+      <div class="vc-profile">${profileLabel[v.profile] || v.profile}</div>
+    </div>
+  `).join('');
+}
+
+// Called by the Print button — triggers print then marks batch as printed
+function printVouchers() {
+  if (!pendingPrintCodes.length) {
+    alert('No unprinted unused vouchers to print. Generate more first.');
+    return;
+  }
+  window.print();
+}
+
+// After print dialog closes (whether printed or cancelled), mark the batch
+// so these codes never appear again in future print runs
+window.onafterprint = async function() {
+  if (!pendingPrintCodes.length) return;
+  try {
+    const r = await fetch(API + '/api/admin/vouchers/mark-printed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes: pendingPrintCodes }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      showToast(`🖨 ${data.count} vouchers marked as printed`);
+      pendingPrintCodes = [];
+      loadVouchers();  // refresh table so printed ones update
+    }
+  } catch(e) {
+    console.error('mark-printed error:', e);
+  }
+};
+
+// ── Live sessions ─────────────────────────────────────────────────────────────
+async function loadSessions() {
+  try {
+    const r    = await fetch(API + '/api/admin/sessions');
+    const data = await r.json();
+    const rows = data.sessions || [];
+    document.getElementById('statActive').textContent = rows.length;
+
+    const tbody = document.getElementById('sessionTable');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No active sessions</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(s => `<tr>
+      <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${s.user}</td>
+      <td>${fmtDur(s.uptime)}</td>
+      <td>${s['session-time-left'] ? fmtDur(s['session-time-left']) : '∞'}</td>
+      <td style="color:var(--muted);font-size:.78rem">${s.address || '—'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="kickSession('${s.user}')">Kick</button></td>
+    </tr>`).join('');
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ── Generate vouchers ─────────────────────────────────────────────────────────
+async function generateVouchers() {
+  const profile = document.getElementById('genProfile').value;
+  const type    = document.getElementById('genType').value;
+  const length  = parseInt(document.getElementById('genLength').value);
+  const qty     = parseInt(document.getElementById('genQty').value) || 1;
+  const btn     = event.target;
+  btn.disabled  = true; btn.textContent = 'Generating…';
+
+  try {
+    const r    = await fetch(API + '/api/admin/vouchers/generate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ profile, qty, type, length }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      showToast(`✅ ${data.count} vouchers created`);
+      await loadAll();
+    } else {
+      showToast('❌ ' + (data.message || 'Error'));
+    }
+  } catch(e) {
+    showToast('❌ Network error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate Vouchers';
+  }
+}
+
+// ── Disable / kick ────────────────────────────────────────────────────────────
+async function disableVoucher(code) {
+  if (!confirm(`Disable voucher ${code}? The user will be disconnected.`)) return;
+  const r    = await fetch(API + '/api/admin/vouchers/disable', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code })
+  });
+  const data = await r.json();
+  showToast(data.success ? '✅ Voucher disabled' : '❌ ' + data.message);
+  loadAll();
+}
+
+async function kickSession(user) {
+  if (!confirm(`Disconnect ${user}?`)) return;
+  const r    = await fetch(API + '/api/session/logout', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user })
+  });
+  const data = await r.json();
+  showToast(data.success ? '✅ Session ended' : '❌ ' + data.message);
+  loadSessions();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(() => showToast('📋 Copied!'));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function fmtSec(s) {
+  if (!s || s <= 0) return '0m';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function fmtDur(str) {
+  if (!str || str === '0s') return '0m';
+  const m = str.match(/(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+  if (!m) return str;
+  const d=parseInt(m[1])||0, h=parseInt(m[2])||0, mn=parseInt(m[3])||0;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${mn}m`;
+  return `${mn}m`;
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+var metricsPinOk  = false;
+var currentPeriod = 'month';
+var metricsPin    = '';
+
+function openMetrics() {
+  document.getElementById('metricsModal').classList.add('open');
+  document.getElementById('metricsPin').value = '';
+  document.getElementById('pinError').style.display = 'none';
+  if (!metricsPinOk) {
+    document.getElementById('pinGate').style.display     = 'block';
+    document.getElementById('metricsContent').style.display = 'none';
+  } else {
+    loadMetrics(currentPeriod);
+  }
+  setTimeout(() => document.getElementById('metricsPin').focus(), 100);
+}
+
+function closeMetrics() {
+  document.getElementById('metricsModal').classList.remove('open');
+}
+
+async function checkPin() {
+  const entered = document.getElementById('metricsPin').value.trim();
+  // Test the PIN against the server — server rejects with 401 if wrong
+  const r = await fetch(API + '/api/admin/metrics?pin=' + encodeURIComponent(entered) + '&period=day');
+  if (r.status === 401) {
+    document.getElementById('pinError').style.display = 'block';
+    document.getElementById('metricsPin').value = '';
+    return;
+  }
+  metricsPin    = entered;
+  metricsPinOk  = true;
+  document.getElementById('pinGate').style.display        = 'none';
+  document.getElementById('metricsContent').style.display = 'block';
+  document.getElementById('pinError').style.display       = 'none';
+  loadMetrics(currentPeriod);
+}
+
+function switchPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadMetrics(period);
+}
+
+async function loadMetrics(period) {
+  try {
+    const r    = await fetch(`${API}/api/admin/metrics?pin=${encodeURIComponent(metricsPin)}&period=${period}`);
+    const data = await r.json();
+    renderMetrics(data, period);
+  } catch(e) {
+    console.error('Metrics error:', e);
+  }
+}
+
+var allEvents    = [];
+var currentSrc   = 'all';
+var currentTotals = {};  // stores full-period totals so we can reset cards after closing a day view
+
+function ugx(n) {
+  if (!n) return 'UGX 0';
+  return 'UGX ' + Number(n).toLocaleString();
+}
+
+// Update the five summary cards from any events array (full period OR a single day)
+function updateSummaryCards(events) {
+  const net   = events.reduce((s, e) => s + (e.net_ugx   || 0), 0);
+  const gross = events.reduce((s, e) => s + (e.gross_ugx  || 0), 0);
+  const count = events.length;
+  const mmNet = events.filter(e => e.source === 'mobile_money').reduce((s, e) => s + (e.net_ugx || 0), 0);
+  const vNet  = events.filter(e => e.source === 'voucher').reduce((s, e) => s + (e.net_ugx || 0), 0);
+  document.getElementById('mNetTotal').textContent   = ugx(net);
+  document.getElementById('mGrossTotal').textContent = ugx(gross);
+  document.getElementById('mCount').textContent      = count + ' voucher' + (count !== 1 ? 's' : '');
+  document.getElementById('mMmNet').textContent      = ugx(mmNet);
+  document.getElementById('mVNet').textContent       = ugx(vNet);
+}
+
+function renderMetrics(data, period) {
+  currentTotals = data.totals || {};
+  allEvents     = data.events || [];
+
+  // Summary cards show the full period by default
+  updateSummaryCards(allEvents);
+
+  if (period === 'day') {
+    // Today: hide calendar, show today's transactions directly
+    document.getElementById('calSection').style.display  = 'none';
+    const today = new Date().toISOString().slice(0, 10);
+    showDayTransactions(today, 'Today');
+  } else {
+    // Week/Month/Year: show calendar, hide transactions until a date is clicked
+    document.getElementById('calSection').style.display  = '';
+    document.getElementById('dayTxPanel').style.display  = 'none';
+    renderCalendar(data.rows || [], period);
+  }
+}
+
+function filterTx(src, btn) {
+  currentSrc = src;
+  document.querySelectorAll('#srcAll,#srcMM,#srcCash').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = src === 'all' ? allEvents : allEvents.filter(e => e.source === src);
+  renderTxTable(filtered);
+}
+
+function renderTxTable(events) {
+  const tbody = document.getElementById('txTable');
+  const profileLabel = { 'mini-day':'4 Hours','1day':'1 Day','1week':'1 Week','1month':'1 Month' };
+  if (!events.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No transactions</td></tr>';
+    document.getElementById('txFooter').textContent = '';
+    return;
+  }
+  tbody.innerHTML = events.map(e => {
+    const isMM  = e.source === 'mobile_money';
+    const badge = isMM
+      ? '<span class="badge" style="background:rgba(255,200,0,.12);color:#ffc800">📱 Mobile Money</span>'
+      : '<span class="badge" style="background:rgba(167,139,250,.12);color:#a78bfa">🎟 Cash</span>';
+    return `<tr>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${e.recorded_at}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)">${e.code}</td>
+      <td>${profileLabel[e.profile] || e.profile}</td>
+      <td>${badge}</td>
+      <td style="color:var(--muted);font-size:.8rem">${ugx(e.gross_ugx)}</td>
+      <td style="color:var(--teal);font-weight:600;font-size:.8rem">${ugx(e.net_ugx)}</td>
+    </tr>`;
+  }).join('');
+
+  // Footer totals for filtered view
+  const net   = events.reduce((s, e) => s + (e.net_ugx  || 0), 0);
+  const gross = events.reduce((s, e) => s + (e.gross_ugx || 0), 0);
+  document.getElementById('txFooter').textContent =
+    `${events.length} transaction${events.length !== 1 ? 's' : ''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
+}
+
+function renderCalendar(rows, period) {
+  // Build a map of day → net revenue
+  const dayMap = {};
+  rows.forEach(r => { dayMap[r.day] = r.net || 0; });
+  const maxVal = Math.max(1, ...Object.values(dayMap));
+
+  // How many days to show
+  const nDays = { day: 1, week: 7, month: 30, year: 365 }[period] || 30;
+  const today = new Date();
+  const days  = [];
+  for (let i = nDays - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  // Group into weeks (columns of 7)
+  function intensity(val) {
+    if (!val) return 0;
+    const ratio = val / maxVal;
+    if (ratio < 0.2)  return 1;
+    if (ratio < 0.4)  return 2;
+    if (ratio < 0.7)  return 3;
+    return 4;
+  }
+  const colors = [
+    'rgba(255,255,255,.06)',
+    'rgba(0,198,178,.2)',
+    'rgba(0,198,178,.45)',
+    'rgba(0,198,178,.7)',
+    '#00c6b2'
+  ];
+
+  // Split into columns of up to 7 days
+  const cols = [];
+  for (let i = 0; i < days.length; i += 7) cols.push(days.slice(i, i + 7));
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = cols.map(col => `
+    <div class="cal-col">
+      ${col.map(d => {
+        const val = dayMap[d] || 0;
+        const tip = `${formatDateLabel(d)}: ${ugx(val)}`;
+        return `<div class="cal-cell" style="background:${colors[intensity(val)]}"
+          data-tip="${tip}" data-date="${d}"
+          onclick="onCalClick('${d}')"></div>`;
+      }).join('')}
+    </div>
+  `).join('');
+
+  // Month labels
+  const labels = document.getElementById('calMonthLabels');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let lastMonth = -1;
+  labels.innerHTML = cols.map(col => {
+    const m = new Date(col[0]).getMonth();
+    if (m !== lastMonth) { lastMonth = m; return `<div class="cal-month-lbl" style="width:${col.length * 17}px">${months[m]}</div>`; }
+    return `<div style="width:${col.length * 17}px"></div>`;
+  }).join('');
+}
+
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+
+var dayEvents   = [];
+var selectedDay = null;
+
+function onCalClick(date) {
+  document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
+  const cell = document.querySelector(`.cal-cell[data-date="${date}"]`);
+  if (cell) cell.classList.add('selected');
+  showDayTransactions(date);
+}
+
+// Show transactions for a specific date AND update summary cards to match that day
+function showDayTransactions(date, label) {
+  selectedDay = date;
+  dayEvents   = allEvents.filter(e => e.recorded_at && e.recorded_at.startsWith(date));
+
+  // Update summary cards to reflect this specific day only
+  updateSummaryCards(dayEvents);
+
+  const title = label || formatDateLabel(date);
+  document.getElementById('dayTxTitle').textContent  = 'Transactions · ' + title;
+  document.getElementById('dayTxPanel').style.display = '';
+
+  // Reset source filter to All
+  document.querySelectorAll('.src-tab').forEach(b => b.classList.remove('active'));
+  const allBtn = document.getElementById('stAll');
+  if (allBtn) allBtn.classList.add('active');
+  renderDayTxTable(dayEvents);
+
+  document.getElementById('dayTxPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeDayTx() {
+  document.getElementById('dayTxPanel').style.display = 'none';
+  document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
+  selectedDay = null;
+  // Reset summary cards to the full period totals
+  updateSummaryCards(allEvents);
+}
+
+function filterDayTx(src, btn) {
+  document.querySelectorAll('.src-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = src === 'all' ? dayEvents : dayEvents.filter(e => e.source === src);
+  renderDayTxTable(filtered);
+}
+
+function renderDayTxTable(events) {
+  const tbody  = document.getElementById('dayTxBody');
+  const pLabel = { 'mini-day':'4 Hours', '1day':'1 Day', '1week':'1 Week', '1month':'1 Month' };
+  if (!events.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No transactions for this date</td></tr>';
+    document.getElementById('dayTxFooter').textContent = '';
+    return;
+  }
+  tbody.innerHTML = events.map(e => {
+    const isMM  = e.source === 'mobile_money';
+    const badge = isMM
+      ? '<span class="badge" style="background:rgba(255,200,0,.12);color:#ffc800">📱 Mobile</span>'
+      : '<span class="badge" style="background:rgba(167,139,250,.12);color:#a78bfa">🎟 Cash</span>';
+    const time  = e.recorded_at ? e.recorded_at.slice(11, 16) : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${time}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)">${e.code}</td>
+      <td>${pLabel[e.profile] || e.profile}</td>
+      <td>${badge}</td>
+      <td style="color:var(--muted);font-size:.8rem">${ugx(e.gross_ugx)}</td>
+      <td style="color:var(--teal);font-weight:600;font-size:.8rem">${ugx(e.net_ugx)}</td>
+    </tr>`;
+  }).join('');
+  const net   = events.reduce((s, e) => s + (e.net_ugx   || 0), 0);
+  const gross = events.reduce((s, e) => s + (e.gross_ugx  || 0), 0);
+  document.getElementById('dayTxFooter').textContent =
+    `${events.length} transaction${events.length !== 1 ? 's' : ''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
+}
+
+// Close modal on backdrop click
+document.getElementById('metricsModal').addEventListener('click', function(e) {
+  if (e.target === this) closeMetrics();
+});
+
+// ── Auto-refresh active sessions every 30s ───────────────────────────────────
+loadAll();
+setInterval(loadSessions, 30000);
+</script>
+</body>
+</html>

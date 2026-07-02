@@ -11,10 +11,10 @@ app.use(express.static('.'));  // serves your index.html, app.js, style.css
 
 const IOTEC_CLIENT_ID     = 'pay-019e9c6e-0cda-775d-b88e-40687853599c';
 const IOTEC_CLIENT_SECRET = 'IO-NJs73yg0NVd6vMSOFaLn3a2NPDeXYUmnD';
-const IOTEC_WALLET_ID     = '019e9c6e-0cfe-76b6-87b0-d94d7b547626';
+const IOTEC_WALLET_ID     = '019ed5d9-2653-7521-9ede-b99f59001c9e';
 
 // ─── MikroTik router credentials ──────────────────────────────
-const ROUTER_HOST = '192.168.88.1';
+const ROUTER_HOST = '10.0.0.2';
 const ROUTER_USER = 'melvin';
 const ROUTER_PASS = 'admin';
 
@@ -43,6 +43,16 @@ async function getMacFromIp(clientIp) {
   const lease = leases.find(l => l['active-address'] === clientIp && l.status === 'bound');
   return lease ? lease['mac-address'] : null;
 }
+
+app.get('/api/mac/check', (req, res) => {
+  const mac = (req.query.mac || '').toUpperCase();
+  if (!mac) return res.json({ found: false });
+  const voucher = db.getVoucherByMac(mac);
+  if (voucher && !voucher.disabled && voucher.remaining_seconds > 0) {
+    return res.json({ found: true, code: voucher.code });
+  }
+  res.json({ found: false });
+});
 
 // ─── Voucher redemption endpoint ─────────────────────────────────────────────
 // Validates against our SQLite database (covers both admin-generated vouchers
@@ -212,17 +222,22 @@ app.get('/api/admin/vouchers', (req, res) => {
   const path     = require('path');
   const adminDb  = new Database(path.join(__dirname, 'mbuya.db'));
   const rows     = adminDb.prepare('SELECT * FROM vouchers ORDER BY created_at DESC').all();
-  res.json({ vouchers: rows.map(v => ({
-    ...v,
-    disabled:          v.disabled === 1,
-    remaining_seconds: Math.max(0, v.allocated_seconds - v.used_seconds),
-  }))});
+  res.json({ vouchers: rows.map(v => {
+    let remaining_seconds;
+    if (v.expires_at) {
+      const expiresMs = new Date(v.expires_at).getTime();
+      remaining_seconds = Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
+    } else {
+      remaining_seconds = v.allocated_seconds;
+    }
+    return { ...v, disabled: v.disabled === 1, remaining_seconds };
+  })});
 });
 
 // ── Generate a batch of vouchers ──────────────────────────────────────────────
 app.post('/api/admin/vouchers/generate', (req, res) => {
   const { profile, qty, type, length } = req.body;
-  const PROFILE_SECONDS = { '1day': 86400, '1week': 604800, '1month': 2592000 };
+  const PROFILE_SECONDS = { 'mini-day': 14400, '1day': 86400, '1week': 604800, '1month': 2592000 };
   if (!PROFILE_SECONDS[profile]) return res.status(400).json({ success: false, message: 'Invalid profile.' });
 
   const count  = Math.min(parseInt(qty) || 1, 500);
@@ -318,6 +333,19 @@ app.post('/api/session/logout', async (req, res) => {
   } catch (err) {
     console.error('Logout error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Mark a batch of vouchers as printed ───────────────────────────────────────
+app.post('/api/admin/vouchers/mark-printed', (req, res) => {
+  const codes = req.body.codes;
+  if (!Array.isArray(codes) || !codes.length)
+    return res.status(400).json({ success: false, message: 'No codes provided.' });
+  try {
+    db.markPrinted(codes);
+    res.json({ success: true, count: codes.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
   }
 });
 

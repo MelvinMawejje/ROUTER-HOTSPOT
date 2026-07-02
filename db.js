@@ -1,4 +1,7 @@
 // db.js — SQLite database for persistent voucher tracking
+// Time model: WALL-CLOCK (expires_at = first_used_at + allocated_seconds)
+// The timer runs from first activation regardless of whether user is connected.
+
 const Database = require('better-sqlite3');
 const path     = require('path');
 
@@ -12,15 +15,15 @@ db.exec(`
     used_seconds      INTEGER NOT NULL DEFAULT 0,
     first_used_at     TEXT,
     expires_at        TEXT,
-    created_at        TEXT    DEFAULT (datetime('now')),
+    created_at        TEXT    DEFAULT (datetime('now', '+3 hours')),
     disabled          INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
     session_id      TEXT PRIMARY KEY,
     code            TEXT NOT NULL,
-    started_at      TEXT DEFAULT (datetime('now')),
-    last_update     TEXT DEFAULT (datetime('now')),
+    started_at      TEXT DEFAULT (datetime('now', '+3 hours')),
+    last_update     TEXT DEFAULT (datetime('now', '+3 hours')),
     session_seconds INTEGER NOT NULL DEFAULT 0
   );
 
@@ -31,29 +34,43 @@ db.exec(`
     source      TEXT    NOT NULL,
     gross_ugx   INTEGER NOT NULL,
     net_ugx     INTEGER NOT NULL,
-    recorded_at TEXT    DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS mac_bindings (
-    mac        TEXT PRIMARY KEY,
-    code       TEXT NOT NULL,
-    bound_at   TEXT DEFAULT (datetime('now'))
+    recorded_at TEXT    DEFAULT (datetime('now', '+3 hours'))
   );
 `);
 
+// ── Migrate existing databases ────────────────────────────────────────────────
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN first_used_at TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN expires_at TEXT`);    } catch(e) {}
-try { db.exec(`ALTER TABLE vouchers ADD COLUMN mac TEXT`);          } catch(e) {} // kept for compatibility
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN printed_at TEXT`);    } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS revenue_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL,
+    profile     TEXT    NOT NULL,
+    source      TEXT    NOT NULL,
+    gross_ugx   INTEGER NOT NULL,
+    net_ugx     INTEGER NOT NULL,
+    recorded_at TEXT    DEFAULT (datetime('now', '+3 hours'))
+  )
+`); } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS mac_bindings (
+    mac TEXT PRIMARY KEY, code TEXT NOT NULL,
+    bound_at TEXT DEFAULT (datetime('now', '+3 hours'))
+  )
+`); } catch(e) {}
 
 const PROFILE_SECONDS = {
-  '1day':   86400,
-  '1week':  604800,
-  '1month': 2592000,
+  'mini-day': 14400,
+  '1day':     86400,
+  '1week':    604800,
+  '1month':   2592000,
 };
 
 module.exports = {
   PROFILE_SECONDS,
 
+  // ── Create voucher (admin generate or payment) ────────────────────────────
   createVoucher(code, profile) {
     const secs = PROFILE_SECONDS[profile] || 86400;
     db.prepare(`
@@ -63,16 +80,24 @@ module.exports = {
     `).run(code, profile, secs);
   },
 
+  // ── Get voucher with WALL-CLOCK remaining time ────────────────────────────
+  // remaining_seconds = expires_at - NOW  (if activated)
+  //                   = allocated_seconds (if never used)
   getVoucher(code) {
     const row = db.prepare('SELECT * FROM vouchers WHERE code = ?').get(code);
     if (!row) return null;
+
     let remaining_seconds;
     if (row.expires_at) {
-      const expiresMs = new Date(row.expires_at).getTime();
+      // expires_at is stored as EAT (UTC+3), so parse it as UTC+3
+      const eatStr   = row.expires_at.replace(' ', 'T') + '+03:00';
+      const expiresMs = new Date(eatStr).getTime();
       remaining_seconds = Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
     } else {
+      // Not yet activated — full allocation available
       remaining_seconds = row.allocated_seconds;
     }
+
     return {
       ...row,
       disabled: row.disabled === 1,
@@ -80,7 +105,7 @@ module.exports = {
     };
   },
 
-  // ── Look up voucher by MAC address ────────────────────────────
+   // ── Look up voucher by MAC address ────────────────────────────
   getVoucherByMac(mac) {
     if (!mac) return null;
     const binding = db.prepare(
@@ -95,27 +120,36 @@ module.exports = {
     if (!mac || !code) return;
     db.prepare(`
       INSERT OR REPLACE INTO mac_bindings (mac, code, bound_at)
-      VALUES (?, ?, datetime('now'))
+      VALUES (?, ?, datetime('now', '+3 hours'))
     `).run(mac.toUpperCase(), code);
     console.log(`[DB] MAC ${mac.toUpperCase()} bound to ${code}`);
   },
 
+
+  // ── RADIUS Accounting: Start ──────────────────────────────────────────────
+  // On FIRST use: stamp first_used_at and calculate the hard expiry time.
+  // On subsequent logins: expiry is already set — don't change it.
   startSession(sessionId, code) {
-    const voucher = this.getVoucher(code);
+    const voucher = db.prepare('SELECT * FROM vouchers WHERE code = ?').get(code);
     if (voucher && !voucher.first_used_at) {
       const now       = new Date();
       const expiresAt = new Date(now.getTime() + voucher.allocated_seconds * 1000);
+      // Store as EAT (UTC+3) to match all other timestamps in the DB
+      const toEAT = d => new Date(d.getTime() + 3 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19);
       db.prepare(`UPDATE vouchers SET first_used_at = ?, expires_at = ? WHERE code = ?`)
-        .run(now.toISOString(), expiresAt.toISOString(), code);
-      console.log(`[DB] Voucher ${code} activated — expires ${expiresAt.toISOString()}`);
+        .run(toEAT(now), toEAT(expiresAt), code);
+      console.log(`[DB] Voucher ${code} activated — expires ${toEAT(expiresAt)} EAT`);
     }
+
     db.prepare(`
       INSERT OR REPLACE INTO sessions
         (session_id, code, started_at, last_update, session_seconds)
-      VALUES (?, ?, datetime('now'), datetime('now'), 0)
+      VALUES (?, ?, datetime('now', '+3 hours'), datetime('now', '+3 hours'), 0)
     `).run(sessionId, code);
   },
 
+  // ── RADIUS Accounting: Interim-Update ────────────────────────────────────
+  // Track actual connected seconds for reporting (not used for remaining time).
   updateSession(sessionId, cumulativeSeconds) {
     const sess = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId);
     if (!sess) return;
@@ -123,7 +157,7 @@ module.exports = {
     if (delta <= 0) return;
     db.prepare(`UPDATE vouchers SET used_seconds = used_seconds + ? WHERE code = ?`)
       .run(delta, sess.code);
-    db.prepare(`UPDATE sessions SET session_seconds = ?, last_update = datetime('now') WHERE session_id = ?`)
+    db.prepare(`UPDATE sessions SET session_seconds = ?, last_update = datetime('now', '+3 hours') WHERE session_id = ?`)
       .run(cumulativeSeconds, sessionId);
   },
 
@@ -131,8 +165,21 @@ module.exports = {
     this.updateSession(sessionId, cumulativeSeconds);
   },
 
+  // ── Record a revenue event ────────────────────────────────────────────────
+  // source: 'voucher' | 'mobile_money'
+  // mobile_money earns 96% of face value; vouchers earn 100%
+  // ── Mark vouchers as printed ──────────────────────────────────────────────
+  // Prevents them from appearing in the next print batch.
+  markPrinted(codes) {
+    const stmt = db.prepare(
+      `UPDATE vouchers SET printed_at = datetime('now', '+3 hours') WHERE code = ? AND printed_at IS NULL`
+    );
+    const run = db.transaction(() => codes.forEach(c => stmt.run(c)));
+    run();
+  },
+
   recordRevenue(code, profile, source) {
-    const PRICES   = { '1day': 1000, '1week': 5000, '1month': 20000 };
+    const PRICES   = { 'mini-day': 500, '1day': 1000, '1week': 5000, '1month': 20000 };
     const gross    = PRICES[profile] || 0;
     const net      = source === 'mobile_money' ? Math.floor(gross * 0.96) : gross;
     db.prepare(`
@@ -141,7 +188,10 @@ module.exports = {
     `).run(code, profile, source, gross, net);
   },
 
+  // ── Metrics query ─────────────────────────────────────────────────────────
+  // Returns daily totals and per-day rows for the requested period
   getMetrics(period) {
+    // period: 'day' | 'week' | 'month' | 'year'
     const cutoffs = { day: 1, week: 7, month: 30, year: 365 };
     const days    = cutoffs[period] || 30;
     const rows    = db.prepare(`
@@ -153,7 +203,7 @@ module.exports = {
         SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
         SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '-${days} days')
+      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
       GROUP BY date(recorded_at)
       ORDER BY day ASC
     `).all();
@@ -166,9 +216,20 @@ module.exports = {
         SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
         SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '-${days} days')
+      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
     `).get();
 
-    return { rows, totals: totals || { gross:0, net:0, count:0, mm_net:0, v_net:0 } };
+    const events = db.prepare(`
+      SELECT code, profile, source, gross_ugx, net_ugx, recorded_at
+      FROM revenue_events
+      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
+      ORDER BY recorded_at ASC
+    `).all();
+
+    return {
+      rows,
+      totals: totals || { gross:0, net:0, count:0, mm_net:0, v_net:0 },
+      events,
+    };
   },
 };

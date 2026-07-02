@@ -6,7 +6,7 @@ const dgram  = require('dgram');
 const radius = require('radius');
 const db     = require('./db');
 
-const ROUTER_HOST = '192.168.88.1';
+const ROUTER_HOST = '10.0.0.2';
 const ROUTER_USER = 'melvin';
 const ROUTER_PASS = 'admin';
 
@@ -209,6 +209,15 @@ acctServer.on('message', (msg, rinfo) => {
       db.updateSession(sessionId, sessionSecs);
     } else if (statusType === 'Stop') {
       db.stopSession(sessionId, sessionSecs);
+        // Re-sync the hotspot user's limit-uptime so seamless reconnect works
+        if (clientMac) {
+          const voucher = db.getVoucher(username);
+          if (voucher && voucher.remaining_seconds > 0) {
+            await createHotspotUser(clientMac, username, voucher.remaining_seconds);
+          } else if (voucher && voucher.remaining_seconds <= 0) {
+            await disableHotspotUser(clientMac);
+          }
+        }
     }
 
     const resp = radius.encode_response({
