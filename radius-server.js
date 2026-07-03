@@ -13,7 +13,7 @@ const ROUTER_PASS = 'admin';
 const RADIUS_SECRET    = 'mbuyawifi-secret';
 const AUTH_PORT        = 1812;
 const ACCT_PORT        = 1813;
-const IDLE_TIMEOUT_SEC = 300;
+const IDLE_TIMEOUT_SEC = 43200;
 
 // NOTE: We no longer create local MikroTik hotspot users keyed by MAC.
 // MAC-based reconnection is already handled entirely through RADIUS
@@ -107,7 +107,6 @@ authServer.on('message', (msg, rinfo) => {
     secret:  RADIUS_SECRET,
     attributes: [
       ['Session-Timeout', voucher.remaining_seconds],
-      ['Idle-Timeout',    IDLE_TIMEOUT_SEC],
       ['Reply-Message',   `Welcome! You have ${mins} minutes remaining.`],
     ]
   });

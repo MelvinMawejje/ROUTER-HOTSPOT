@@ -42,6 +42,8 @@ db.exec(`
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN first_used_at TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN expires_at TEXT`);    } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN printed_at TEXT`);    } catch(e) {}
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN transaction_id TEXT`); } catch(e) {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_vouchers_txn ON vouchers(transaction_id)`); } catch(e) {}
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS revenue_events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +115,26 @@ module.exports = {
     ).get(mac.toUpperCase());
     if (!binding) return null;
     return this.getVoucher(binding.code);
+  },
+
+  // ── Look up voucher by IOTEC mobile-money transaction ID ──────
+  // Lets a user who got disconnected retrieve their voucher by
+  // pasting the transaction ID they received from MTN/Airtel/IOTEC.
+  getVoucherByTransactionId(transactionId) {
+    if (!transactionId) return null;
+    const row = db.prepare(
+      'SELECT code FROM vouchers WHERE transaction_id = ?'
+    ).get(String(transactionId).trim());
+    if (!row) return null;
+    return this.getVoucher(row.code);
+  },
+
+  // ── Link a voucher to the IOTEC transaction ID that paid for it ─
+  bindTransactionId(code, transactionId) {
+    if (!code || !transactionId) return;
+    db.prepare(`UPDATE vouchers SET transaction_id = ? WHERE code = ?`)
+      .run(String(transactionId).trim(), code);
+    console.log(`[DB] Voucher ${code} linked to transaction ${transactionId}`);
   },
 
   // ── Bind MAC to voucher (overwrites old binding) ──────────────

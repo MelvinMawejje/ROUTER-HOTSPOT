@@ -123,7 +123,7 @@ app.post('/api/pay', async (req, res) => {
       },
       body: JSON.stringify({
         category:                   'MobileMoney',
-        currency:                   'ITX',
+        currency:                   'UGX',
         walletId:                    IOTEC_WALLET_ID,
         externalId:                 'MBUYA-' + Date.now(),
         payer:                       phone,
@@ -162,7 +162,7 @@ app.post('/api/pay', async (req, res) => {
 // never starts. Keeping the voucher in RADIUS only (our db) forces MikroTik
 // to go through RADIUS for auth AND accounting, which is what we want.
 app.post('/api/pay/connect', async (req, res) => {
-  const { phone, packageId } = req.body;
+  const { phone, packageId, transactionId } = req.body;
   if (!phone || !packageId)
     return res.status(400).json({ success: false, message: 'Missing phone or package ID.' });
 
@@ -175,6 +175,17 @@ app.post('/api/pay/connect', async (req, res) => {
 
     // Register in our database — RADIUS handles authentication from here
     db.createVoucher(voucherCode, packageId);
+
+    // Link this voucher to the IOTEC transaction ID so the user can
+    // retrieve it later (e.g. after getting disconnected) by pasting
+    // the transaction ID back into the portal.
+    if (transactionId) {
+      try {
+        db.bindTransactionId(voucherCode, transactionId);
+      } catch (e) {
+        console.error('[txn-link] bindTransactionId failed (non-fatal):', e.message);
+      }
+    }
 
     // Record revenue (96% net for mobile money) — non-fatal if DB not ready
     try {
@@ -193,6 +204,34 @@ app.post('/api/pay/connect', async (req, res) => {
     console.error('Pay/connect error:', err.message);
     res.status(500).json({ success: false, message: err.message || 'Server error.' });
   }
+});
+
+// ─── Retrieve a voucher by IOTEC transaction ID ──────────────────────────────
+// Lets a user who got disconnected (e.g. router reboot, MAC binding lost)
+// paste the transaction ID from their mobile money payment to recover their
+// voucher code and reconnect, instead of having to pay again.
+app.post('/api/voucher/lookup-by-transaction', (req, res) => {
+  const transactionId = (req.body.transactionId || '').trim();
+  if (!transactionId)
+    return res.status(400).json({ success: false, message: 'Please enter your transaction ID.' });
+
+  const voucher = db.getVoucherByTransactionId(transactionId);
+
+  if (!voucher)
+    return res.status(404).json({ success: false, message: 'No voucher found for that transaction ID.' });
+
+  if (voucher.disabled)
+    return res.status(400).json({ success: false, message: 'This voucher has been disabled.' });
+
+  if (voucher.remaining_seconds <= 0)
+    return res.status(400).json({ success: false, message: 'This voucher has expired — all session time has been used.' });
+
+  res.json({
+    success:           true,
+    code:               voucher.code,
+    masked:             voucher.code.slice(0, 4) + '••••' + voucher.code.slice(-2),
+    remaining_seconds:  voucher.remaining_seconds,
+  });
 });
 
 // ── Route: Poll transaction status ────────────────────────────────────────────
