@@ -202,10 +202,15 @@ function pollStatus(txId, phone, pkg, tries) {
     .then(function(data) {
       if (data.status === 'Success') {
         closeWaiting();
+        // Use the telco (MTN/Airtel) reference number — this is what the
+        // customer actually sees in their payment SMS, not IOTEC's own
+        // internal collection ID. Fall back to txId just in case it's
+        // ever missing on some payment channel.
+        var customerTxnId = data.vendorTransactionId || txId;
         return fetch(API_BASE + '/api/pay/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: '256' + phone.substring(1), packageId: pkg.id, transactionId: txId })
+          body: JSON.stringify({ phone: '256' + phone.substring(1), packageId: pkg.id, transactionId: customerTxnId })
         })
         .then(function(r){ return r.json(); })
         .then(function(cd) {
