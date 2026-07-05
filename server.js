@@ -340,10 +340,16 @@ app.get('/api/session/info', async (req, res) => {
     const active = await mikrotikFetch('/ip/hotspot/active');
     const session = active.find(s => s.user === user);
     if (session) {
-      const voucher = db.getVoucher(user);
+      // `user` is whatever MikroTik authenticated the live session with —
+      // that's the voucher code for a manual/mobile-money login, but the
+      // device's MAC address for an automatic mac-binding reconnect.
+      // Try both so the real voucher (and its wall-clock remaining time)
+      // is found either way.
+      const voucher = db.getVoucher(user) || db.getVoucherByMac(user);
       const remaining = voucher ? voucher.remaining_seconds : 0;
       return res.json({
         active: true,
+        code: voucher ? voucher.code : user,
         uptime: session.uptime || '0s',
         remaining: secondsToDuration(remaining),
       });

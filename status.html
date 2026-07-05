@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MBUYA WIFI – Status</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;circle cx='50' cy='50' r='50' fill='%230d1f3c'/&gt;&lt;path d='M18 38c17.7-17.7 46.3-17.7 64 0' stroke='%2300c6b2' stroke-width='8' stroke-linecap='round' fill='none'/&gt;&lt;path d='M28 50c11.6-11.6 32.4-11.6 44 0' stroke='%2300c6b2' stroke-width='8' stroke-linecap='round' fill='none' opacity='.8'/&gt;&lt;path d='M38 62c6.1-6.1 17.9-6.1 24 0' stroke='%2300c6b2' stroke-width='8' stroke-linecap='round' fill='none' opacity='.6'/&gt;&lt;circle cx='50' cy='74' r='5' fill='%2300c6b2'/&gt;&lt;/svg&gt;">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{--teal:#00c6b2;--teal-d:#009e8e;--navy:#0a1628;--card-bg:#0d1f3c;--input-bg:#091529;--border:rgba(0,198,178,0.25);--muted:rgba(255,255,255,0.45);--white:#f0faff}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--navy);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 12px;overflow-x:hidden}
+body::before,body::after{content:'';position:fixed;border-radius:50%;filter:blur(80px);opacity:.18;pointer-events:none;animation:drift 14s ease-in-out infinite alternate}
+body::before{width:520px;height:520px;background:var(--teal);top:-120px;left:-140px}
+body::after{width:420px;height:420px;background:#0066ff;bottom:-100px;right:-120px;animation-delay:-7s}
+@keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(30px,40px) scale(1.08)}}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:20px;padding:32px 28px;width:100%;max-width:400px;box-shadow:0 32px 80px rgba(0,0,0,.55);position:relative;z-index:1;animation:slideUp .55s cubic-bezier(.22,.68,0,1.2) both}
+@keyframes slideUp{from{opacity:0;transform:translateY(40px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.brand-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;letter-spacing:.05em;color:var(--white);line-height:1}
+.brand-title span{color:var(--teal)}
+.dash-status{font-size:.78rem;color:var(--teal);letter-spacing:.06em;margin-top:2px}
+.dash-status.off{color:#ff6b6b}
+.dash-voucher-box{background:rgba(0,198,178,.07);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:20px;text-align:center}
+.dash-voucher-label{font-size:.7rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.dash-voucher-code{font-family:'Syne',sans-serif;font-weight:800;font-size:1.15rem;color:var(--teal);letter-spacing:.06em;word-break:break-all}
+.dash-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px}
+.dash-stat{background:var(--input-bg);border:1.5px solid var(--border);border-radius:12px;padding:16px 12px;text-align:center}
+.dash-stat-icon{font-size:1.4rem;margin-bottom:6px}
+.dash-stat-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.dash-stat-value{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:var(--teal)}
+.btn{border:none;border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.04em;padding:13px;width:100%;cursor:pointer;transition:background .2s,transform .15s,box-shadow .2s;text-align:center;text-decoration:none;display:block}
+.btn-teal{background:var(--teal);color:var(--navy)}
+.btn-teal:hover{background:var(--teal-d);transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,198,178,.3)}
+.btn-teal:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.btn-danger{background:#ff6b6b;color:#fff}
+.btn-danger:hover{background:#e55555;transform:translateY(-1px)}
+.btn-danger:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.logout-prompt{display:none;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:.85rem;color:#ffd8d8;text-align:center;line-height:1.5}
+.footer{text-align:center;color:var(--muted);font-size:.72rem;margin-top:20px}
+</style>
+</head>
+<body>
+
+<!-- MikroTik substitutes these variables server-side before the browser sees this page -->
+<script>
+var MT_USER      = '$(username)';
+var MT_MAC       = '$(mac)';
+var MT_LOGIN_URL = '$(link-login)';
+
+// ── Your Node.js API server — must match the one in login.html ──────────────
+var API_BASE = 'http://139.84.226.141:3000';
+
+var POLL_MS   = 10000;
+var pollTimer = null;
+var isLoggedOut = false;
+
+window.addEventListener('load', function() {
+  document.getElementById('dashUser').textContent = MT_USER;
+  refreshStatus();
+  pollTimer = setInterval(refreshStatus, POLL_MS);
+});
+
+function refreshStatus() {
+  if (isLoggedOut) return;
+  fetch(API_BASE + '/api/session/info?user=' + encodeURIComponent(MT_USER))
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.active) {
+        if (data.code) document.getElementById('dashUser').textContent = data.code;
+        document.getElementById('dashUptime').textContent    = data.uptime;
+        document.getElementById('dashRemaining').textContent = data.remaining;
+        setConnectedState(true);
+      } else {
+        // Session already gone (expired / disconnected elsewhere) — reflect that.
+        setConnectedState(false);
+      }
+    })
+    .catch(function() { /* transient network hiccup — keep last known values */ });
+}
+
+function setConnectedState(connected) {
+  var statusEl = document.getElementById('dashStatus');
+  var actionBtn = document.getElementById('actionBtn');
+  var prompt = document.getElementById('logoutPrompt');
+
+  if (connected) {
+    statusEl.textContent = '🟢 Connected';
+    statusEl.classList.remove('off');
+    actionBtn.textContent = 'Log Out';
+    actionBtn.className = 'btn btn-danger';
+    actionBtn.onclick = doLogout;
+    actionBtn.disabled = false;
+    prompt.style.display = 'none';
+  } else {
+    statusEl.textContent = '🔴 Disconnected';
+    statusEl.classList.add('off');
+    document.getElementById('dashUptime').textContent    = '—';
+    document.getElementById('dashRemaining').textContent = '—';
+    actionBtn.textContent = 'Log In';
+    actionBtn.className = 'btn btn-teal';
+    actionBtn.onclick = goToLogin;
+    actionBtn.disabled = false;
+    prompt.style.display = 'block';
+    isLoggedOut = true;
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+}
+
+function doLogout() {
+  var btn = document.getElementById('actionBtn');
+  btn.textContent = 'Logging out…';
+  btn.disabled = true;
+
+  fetch(API_BASE + '/api/session/logout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user: MT_USER })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function() { setConnectedState(false); })
+  .catch(function() {
+    // Even if the API call fails, don't leave the user stuck — let them
+    // retry logout or head back to the login page manually.
+    btn.textContent = 'Log Out';
+    btn.disabled = false;
+  });
+}
+
+function goToLogin() {
+  window.location.href = MT_LOGIN_URL || '/';
+}
+</script>
+
+<div class="card">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+    <svg viewBox="0 0 52 52" fill="none" style="width:36px;height:36px;flex-shrink:0;">
+      <circle cx="26" cy="26" r="26" fill="rgba(0,198,178,0.08)"/>
+      <path d="M10 22c8.8-8.8 23.2-8.8 32 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M15 27c5.5-5.5 16.5-5.5 22 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round" opacity=".8"/>
+      <path d="M20 32c2.8-2.8 9.2-2.8 12 0" stroke="#00c6b2" stroke-width="2.8" stroke-linecap="round" opacity=".6"/>
+      <circle cx="26" cy="38" r="2.5" fill="#00c6b2"/>
+    </svg>
+    <div>
+      <div class="brand-title">MBUYA <span>WIFI</span></div>
+      <div id="dashStatus" class="dash-status">🟢 Connected</div>
+    </div>
+  </div>
+
+  <div class="dash-voucher-box">
+    <div class="dash-voucher-label">Your Voucher</div>
+    <div id="dashUser" class="dash-voucher-code">…</div>
+  </div>
+
+  <div class="dash-stats">
+    <div class="dash-stat">
+      <div class="dash-stat-icon">⏱</div>
+      <div class="dash-stat-label">Connected For</div>
+      <div class="dash-stat-value" id="dashUptime">…</div>
+    </div>
+    <div class="dash-stat">
+      <div class="dash-stat-icon">⏳</div>
+      <div class="dash-stat-label">Time Left</div>
+      <div class="dash-stat-value" id="dashRemaining">…</div>
+    </div>
+  </div>
+
+  <div id="logoutPrompt" class="logout-prompt">
+    You've been logged out.<br>Tap below to go back to the login page.
+  </div>
+
+  <button id="actionBtn" class="btn btn-danger" onclick="doLogout()">Log Out</button>
+
+  <div class="footer">MBUYA WIFI &nbsp;·&nbsp; Support: 0703 817 517</div>
+</div>
+
+</body>
+</html>
