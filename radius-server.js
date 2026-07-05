@@ -98,6 +98,23 @@ authServer.on('message', (msg, rinfo) => {
     return;
   }
 
+  // ── Enforce one active device per voucher ─────────────────────────────
+  // If this voucher is already connected on a different MAC, reject this
+  // second device instead of letting two devices share the same session.
+  // (When isMacAuth is true, the voucher was found via its own MAC binding,
+  // so it can only ever match the device that's already using it.)
+  if (!isMacAuth && db.isVoucherActiveElsewhere(voucher.code, mac)) {
+    console.log(`[AUTH] REJECTED: ${username} — voucher already in use on another device (active MAC: ${voucher.active_mac})`);
+    const resp = radius.encode_response({
+      packet:  packet,
+      code:    'Access-Reject',
+      secret:  RADIUS_SECRET,
+      attributes: [['Reply-Message', 'This voucher is already in use on another device. Please disconnect it first.']]
+    });
+    authServer.send(resp, rinfo.port, rinfo.address);
+    return;
+  }
+
   const mins = Math.floor(voucher.remaining_seconds / 60);
   console.log(`[AUTH] ACCEPT  → ${username} (${mins}m remaining)`);
 
@@ -153,7 +170,7 @@ acctServer.on('message', (msg, rinfo) => {
   (async () => {
     try {
       if (statusType === 'Start') {
-        db.startSession(sessionId, username);
+        db.startSession(sessionId, username, clientMac);
         if (clientMac) {
           db.bindMac(clientMac, username);
         }

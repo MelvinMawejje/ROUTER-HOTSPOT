@@ -61,6 +61,11 @@ try { db.exec(`
     bound_at TEXT DEFAULT (datetime('now', '+3 hours'))
   )
 `); } catch(e) {}
+// active_mac / active_session_id track which single device currently "holds"
+// the voucher, so a second device can't log in with the same code while the
+// first is still connected.
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN active_mac TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN active_session_id TEXT`); } catch(e) {}
 
 const PROFILE_SECONDS = {
   'mini-day': 14400,
@@ -142,7 +147,7 @@ module.exports = {
     if (!mac || !code) return;
     db.prepare(`
       INSERT OR REPLACE INTO mac_bindings (mac, code, bound_at)
-      VALUES (?, ?, datetime('now', '+3 hours'))
+      VALUES (?, ?, datetime('now', '+3 hours'))q
     `).run(mac.toUpperCase(), code);
     console.log(`[DB] MAC ${mac.toUpperCase()} bound to ${code}`);
   },
@@ -151,7 +156,8 @@ module.exports = {
   // ── RADIUS Accounting: Start ──────────────────────────────────────────────
   // On FIRST use: stamp first_used_at and calculate the hard expiry time.
   // On subsequent logins: expiry is already set — don't change it.
-  startSession(sessionId, code) {
+  // Also claims this device (MAC) as the sole active holder of the voucher.
+  startSession(sessionId, code, mac) {
     const voucher = db.prepare('SELECT * FROM vouchers WHERE code = ?').get(code);
     if (voucher && !voucher.first_used_at) {
       const now       = new Date();
@@ -163,11 +169,27 @@ module.exports = {
       console.log(`[DB] Voucher ${code} activated — expires ${toEAT(expiresAt)} EAT`);
     }
 
+    if (voucher) {
+      db.prepare(`UPDATE vouchers SET active_mac = ?, active_session_id = ? WHERE code = ?`)
+        .run(mac ? mac.toUpperCase() : null, sessionId, code);
+    }
+
     db.prepare(`
       INSERT OR REPLACE INTO sessions
         (session_id, code, started_at, last_update, session_seconds)
       VALUES (?, ?, datetime('now', '+3 hours'), datetime('now', '+3 hours'), 0)
     `).run(sessionId, code);
+  },
+
+  // ── Is this voucher currently in use by a different device? ──────────────
+  // Returns true only when there's an active session held by a MAC other
+  // than the one asking. If we don't have a MAC to compare (mac is falsy),
+  // we fail open rather than lock the owner out.
+  isVoucherActiveElsewhere(code, mac) {
+    if (!mac) return false;
+    const row = db.prepare('SELECT active_mac FROM vouchers WHERE code = ?').get(code);
+    if (!row || !row.active_mac) return false;
+    return row.active_mac !== mac.toUpperCase();
   },
 
   // ── RADIUS Accounting: Interim-Update ────────────────────────────────────
@@ -185,6 +207,16 @@ module.exports = {
 
   stopSession(sessionId, cumulativeSeconds) {
     this.updateSession(sessionId, cumulativeSeconds);
+    // Free up the voucher only if the session that just stopped is still the
+    // one holding it — an old, already-superseded Stop shouldn't kick off
+    // whichever device is currently connected.
+    const sess = db.prepare('SELECT code FROM sessions WHERE session_id = ?').get(sessionId);
+    if (sess) {
+      db.prepare(`
+        UPDATE vouchers SET active_mac = NULL, active_session_id = NULL
+        WHERE code = ? AND active_session_id = ?
+      `).run(sess.code, sessionId);
+    }
   },
 
   // ── Record a revenue event ────────────────────────────────────────────────
