@@ -147,7 +147,7 @@ module.exports = {
     if (!mac || !code) return;
     db.prepare(`
       INSERT OR REPLACE INTO mac_bindings (mac, code, bound_at)
-      VALUES (?, ?, datetime('now', '+3 hours'))q
+      VALUES (?, ?, datetime('now', '+3 hours'))
     `).run(mac.toUpperCase(), code);
     console.log(`[DB] MAC ${mac.toUpperCase()} bound to ${code}`);
   },
