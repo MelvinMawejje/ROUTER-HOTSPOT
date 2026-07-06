@@ -2,18 +2,27 @@
 // Handles RADIUS Auth (1812) and Accounting (1813) for MikroTik hotspot.
 // Creates/updates a local MAC user on first login for seamless re‑authentication.
 
+require('dotenv').config();
 const dgram  = require('dgram');
 const radius = require('radius');
 const db     = require('./db');
 
-const ROUTER_HOST = '10.0.0.2';
-const ROUTER_USER = 'melvin';
-const ROUTER_PASS = 'admin';
+const ROUTER_HOST = process.env.ROUTER_HOST;
+const ROUTER_USER = process.env.ROUTER_USER;
+const ROUTER_PASS = process.env.ROUTER_PASS;
 
-const RADIUS_SECRET    = 'mbuyawifi-secret';
+const RADIUS_SECRET    = process.env.RADIUS_SECRET;
 const AUTH_PORT        = 1812;
 const ACCT_PORT        = 1813;
 const IDLE_TIMEOUT_SEC = 43200;
+
+const REQUIRED_VARS = ['ROUTER_HOST', 'ROUTER_USER', 'ROUTER_PASS', 'RADIUS_SECRET'];
+const missing = REQUIRED_VARS.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error(`❌ Missing required .env variables: ${missing.join(', ')}`);
+  console.error('   Copy .env.example to .env and fill in real values.');
+  process.exit(1);
+}
 
 // Matches a MAC address in either colon/hyphen or bare-hex form — used to
 // detect when RouterOS has authenticated a device by its own MAC-auth

@@ -1,4 +1,5 @@
 // server.js
+require('dotenv').config();
 const express = require('express');
 const db      = require('./db');
 const cors    = require('cors');
@@ -9,14 +10,30 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));  // serves your index.html, app.js, style.css
 
-const IOTEC_CLIENT_ID     = 'pay-019e9c6e-0cda-775d-b88e-40687853599c';
-const IOTEC_CLIENT_SECRET = 'IO-NJs73yg0NVd6vMSOFaLn3a2NPDeXYUmnD';
-const IOTEC_WALLET_ID     = '019ed5d9-2653-7521-9ede-b99f59001c9e';
+const IOTEC_CLIENT_ID     = process.env.IOTEC_CLIENT_ID;
+const IOTEC_CLIENT_SECRET = process.env.IOTEC_CLIENT_SECRET;
+const IOTEC_WALLET_ID     = process.env.IOTEC_WALLET_ID;
 
 // ─── MikroTik router credentials ──────────────────────────────
-const ROUTER_HOST = '10.0.0.2';
-const ROUTER_USER = 'melvin';
-const ROUTER_PASS = 'admin';
+const ROUTER_HOST = process.env.ROUTER_HOST;
+const ROUTER_USER = process.env.ROUTER_USER;
+const ROUTER_PASS = process.env.ROUTER_PASS;
+
+const PORT = process.env.PORT || 3000;
+
+// Fail loudly on startup rather than silently misbehaving in production
+// with an empty password or undefined host.
+const REQUIRED_VARS = [
+  'IOTEC_CLIENT_ID', 'IOTEC_CLIENT_SECRET', 'IOTEC_WALLET_ID',
+  'ROUTER_HOST', 'ROUTER_USER', 'ROUTER_PASS',
+  'METRICS_PIN',
+];
+const missing = REQUIRED_VARS.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error(`❌ Missing required .env variables: ${missing.join(', ')}`);
+  console.error('   Copy .env.example to .env and fill in real values.');
+  process.exit(1);
+}
 
 // ─── Helper: fetch from MikroTik REST API ──────────────────────
 async function mikrotikFetch(endpoint, options = {}) {
@@ -262,7 +279,7 @@ app.get('/api/pay/status/:id', async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log('✅ MBUYA WIFI server running at http://localhost:3000'));
+app.listen(PORT, () => console.log(`✅ MBUYA WIFI server running at http://localhost:${PORT}`));
 // ════════════════════════════════════════════════════════════════════════════════
 // ADMIN ROUTES  —  served at /api/admin/*
 // Keep these behind a password in production (or add IP restriction)
@@ -439,7 +456,7 @@ app.get('/api/admin/sessions', async (req, res) => {
   }
 });
 // ── Metrics endpoint ──────────────────────────────────────────────────────────
-const METRICS_PIN = '1234'; // Change this to your preferred PIN
+const METRICS_PIN = process.env.METRICS_PIN;
 
 app.get('/api/admin/metrics', (req, res) => {
   if (req.query.pin !== METRICS_PIN)
