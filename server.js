@@ -78,7 +78,7 @@ app.post('/api/voucher/redeem', (req, res) => {
   // user gets an immediate, visible message instead of silently failing
   // inside the hidden MikroTik login iframe.
   if (db.isVoucherActiveElsewhere(code, mac))
-    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device.' });
+    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device. Please disconnect it there first, then try again here.' });
 
   // Record revenue on first use — wrapped in try/catch so a DB hiccup
   // never prevents the user from logging in
@@ -237,7 +237,7 @@ app.post('/api/voucher/lookup-by-transaction', (req, res) => {
   // Don't let a retrieved voucher walk straight into the same "already in
   // use" wall RADIUS would hit — tell the user here instead.
   if (db.isVoucherActiveElsewhere(voucher.code, mac))
-    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device.' });
+    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device. Please disconnect it there first, then try again here.' });
 
   res.json({
     success:           true,

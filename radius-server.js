@@ -15,6 +15,12 @@ const AUTH_PORT        = 1812;
 const ACCT_PORT        = 1813;
 const IDLE_TIMEOUT_SEC = 43200;
 
+// Matches a MAC address in either colon/hyphen or bare-hex form — used to
+// detect when RouterOS has authenticated a device by its own MAC-auth
+// mechanism instead of via our login page (where User-Name is the voucher
+// code entered by the person).
+const MAC_RE = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/;
+
 // NOTE: We no longer create local MikroTik hotspot users keyed by MAC.
 // MAC-based reconnection is already handled entirely through RADIUS
 // (see getVoucherByMac / isMacAuth below) via Session-Timeout on each
@@ -63,7 +69,6 @@ authServer.on('message', (msg, rinfo) => {
   const mac = packet.attributes['Calling-Station-Id'] || null;
   console.log(`[AUTH] Request → ${username} (MAC: ${mac || 'none'})`);
 
-  const MAC_RE = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/;
   const isMacAuth = MAC_RE.test(username);
 
   let voucher;
@@ -169,10 +174,27 @@ acctServer.on('message', (msg, rinfo) => {
   // Do the DB bookkeeping afterward, out of band
   (async () => {
     try {
+      // If RouterOS authenticated this session by MAC (its own mac-auth
+      // mechanism, not our login page), User-Name here is the MAC address
+      // itself, not the voucher code. Resolve it back to the real code —
+      // otherwise startSession() looks up a voucher row that doesn't exist
+      // (silently no-op, leaving active_mac stale) and bindMac() overwrites
+      // the correct mac→code binding with mac→mac, breaking status.html and
+      // any future MAC lookups for this device.
+      let code = username;
+      if (MAC_RE.test(username)) {
+        const voucherByMac = db.getVoucherByMac(username);
+        if (voucherByMac) {
+          code = voucherByMac.code;
+        } else {
+          console.warn(`[ACCT] MAC ${username} has no voucher binding — skipping bookkeeping`);
+        }
+      }
+
       if (statusType === 'Start') {
-        db.startSession(sessionId, username, clientMac);
+        db.startSession(sessionId, code, clientMac);
         if (clientMac) {
-          db.bindMac(clientMac, username);
+          db.bindMac(clientMac, code);
         }
       } else if (statusType === 'Interim-Update') {
         db.updateSession(sessionId, sessionSecs);
