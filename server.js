@@ -59,6 +59,7 @@ app.get('/api/mac/check', (req, res) => {
 // and payment-created ones). RADIUS then handles the actual MikroTik auth.
 app.post('/api/voucher/redeem', (req, res) => {
   const code = (req.body.voucherCode || '').trim().toUpperCase();
+  const mac  = (req.body.mac || '').trim();
   if (code.length < 2)
     return res.status(400).json({ success: false, message: 'Please enter a valid voucher code.' });
 
@@ -72,6 +73,12 @@ app.post('/api/voucher/redeem', (req, res) => {
 
   if (voucher.remaining_seconds <= 0)
     return res.status(400).json({ success: false, message: 'This voucher has expired — all session time has been used.' });
+
+  // Same "one device at a time" rule RADIUS enforces — catch it here so the
+  // user gets an immediate, visible message instead of silently failing
+  // inside the hidden MikroTik login iframe.
+  if (db.isVoucherActiveElsewhere(code, mac))
+    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device.' });
 
   // Record revenue on first use — wrapped in try/catch so a DB hiccup
   // never prevents the user from logging in
@@ -212,6 +219,7 @@ app.post('/api/pay/connect', async (req, res) => {
 // voucher code and reconnect, instead of having to pay again.
 app.post('/api/voucher/lookup-by-transaction', (req, res) => {
   const transactionId = (req.body.transactionId || '').trim();
+  const mac = (req.body.mac || '').trim();
   if (!transactionId)
     return res.status(400).json({ success: false, message: 'Please enter your transaction ID.' });
 
@@ -225,6 +233,11 @@ app.post('/api/voucher/lookup-by-transaction', (req, res) => {
 
   if (voucher.remaining_seconds <= 0)
     return res.status(400).json({ success: false, message: 'This voucher has expired — all session time has been used.' });
+
+  // Don't let a retrieved voucher walk straight into the same "already in
+  // use" wall RADIUS would hit — tell the user here instead.
+  if (db.isVoucherActiveElsewhere(voucher.code, mac))
+    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device.' });
 
   res.json({
     success:           true,
