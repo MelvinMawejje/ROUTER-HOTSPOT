@@ -65,13 +65,18 @@ function refreshStatus() {
   fetch(API_BASE + '/api/session/info?user=' + encodeURIComponent(MT_USER))
     .then(function(r){ return r.json(); })
     .then(function(data) {
+      if (data.reachable === false) {
+        // Router/API was unreachable for this poll — NOT a confirmed
+        // disconnect. Keep last known state and just try again next cycle.
+        return;
+      }
       if (data.active) {
         if (data.code) document.getElementById('dashUser').textContent = data.code;
         document.getElementById('dashUptime').textContent    = data.uptime;
         document.getElementById('dashRemaining').textContent = data.remaining;
         setConnectedState(true);
       } else {
-        // Session already gone (expired / disconnected elsewhere) — reflect that.
+        // Router confirmed this user has no active session — a real disconnect.
         setConnectedState(false);
       }
     })
@@ -117,7 +122,16 @@ function doLogout() {
     body: JSON.stringify({ user: MT_USER })
   })
   .then(function(r){ return r.json(); })
-  .then(function() { setConnectedState(false); })
+  .then(function(data) {
+    if (data.reachable === false || !data.success) {
+      // Router unreachable — we can't confirm the session was actually
+      // removed, so don't claim success. Let the person retry.
+      btn.textContent = 'Log Out';
+      btn.disabled = false;
+      return;
+    }
+    setConnectedState(false);
+  })
   .catch(function() {
     // Even if the API call fails, don't leave the user stuck — let them
     // retry logout or head back to the login page manually.

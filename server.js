@@ -36,22 +36,38 @@ if (missing.length) {
 }
 
 // ─── Helper: fetch from MikroTik REST API ──────────────────────
-async function mikrotikFetch(endpoint, options = {}) {
+// Hard timeout so a flaky router doesn't hang requests for a long time, plus
+// one automatic retry — most "fetch failed" hiccups are transient (a dropped
+// keep-alive socket or a momentary blip reaching the router).
+const ROUTER_TIMEOUT_MS = 5000;
+
+async function mikrotikFetch(endpoint, options = {}, attempt = 1) {
   const url = `http://${ROUTER_HOST}/rest${endpoint}`;
   const auth = 'Basic ' + Buffer.from(`${ROUTER_USER}:${ROUTER_PASS}`).toString('base64');
-  const resp = await fetch(url, {
-    ...options,
-    headers: {
-      ...options.headers,
-      'Authorization': auth,
-      'Content-Type': 'application/json',
-    },
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`MikroTik API error: ${resp.status} - ${text}`);
+  try {
+    const resp = await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(ROUTER_TIMEOUT_MS),
+      headers: {
+        ...options.headers,
+        'Authorization': auth,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`MikroTik API error: ${resp.status} - ${text}`);
+    }
+    return await resp.json();
+  } catch (e) {
+    if (attempt < 2) {
+      console.warn(`[MikroTik] ${endpoint} failed (${e.message}) — retrying once`);
+      await new Promise(r => setTimeout(r, 400));
+      return mikrotikFetch(endpoint, options, attempt + 1);
+    }
+    const cause = e.cause ? ` (${e.cause.code || e.cause.message})` : '';
+    throw new Error(`Router unreachable at ${ROUTER_HOST}: ${e.message}${cause}`);
   }
-  return resp.json();
 }
 
 // ─── Helper: get client MAC address from router's DHCP leases ──
@@ -378,17 +394,22 @@ app.get('/api/session/info', async (req, res) => {
       const voucher = db.getVoucher(user) || db.getVoucherByMac(user);
       const remaining = voucher ? voucher.remaining_seconds : 0;
       return res.json({
+        reachable: true,
         active: true,
         code: voucher ? voucher.code : user,
         uptime: session.uptime || '0s',
         remaining: secondsToDuration(remaining),
       });
     } else {
-      return res.json({ active: false });
+      // We successfully reached the router and confirmed this user is not
+      // in its active-session list — this is a real, confirmed disconnect.
+      return res.json({ reachable: true, active: false });
     }
   } catch (err) {
     console.error('Session info error:', err.message);
-    res.status(500).json({ error: err.message });
+    // Router unreachable/slow — this is NOT a confirmed disconnect. Say so
+    // explicitly so the frontend doesn't treat a network hiccup as a logout.
+    res.status(503).json({ reachable: false, error: err.message });
   }
 });
 app.post('/api/session/logout', async (req, res) => {
@@ -404,10 +425,12 @@ app.post('/api/session/logout', async (req, res) => {
         body:   JSON.stringify({ '.id': session['.id'] }),
       });
     }
-    res.json({ success: true });
+    res.json({ success: true, reachable: true });
   } catch (err) {
     console.error('Logout error:', err.message);
-    res.status(500).json({ error: err.message });
+    // Router unreachable — we can't confirm the session was actually
+    // removed, so don't report success.
+    res.status(503).json({ success: false, reachable: false, error: err.message });
   }
 });
 
