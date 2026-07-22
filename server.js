@@ -481,10 +481,15 @@ app.get('/api/admin/sessions', async (req, res) => {
 // ── Metrics endpoint ──────────────────────────────────────────────────────────
 const METRICS_PIN = process.env.METRICS_PIN;
 
-app.get('/api/admin/metrics', (req, res) => {
-  if (req.query.pin !== METRICS_PIN)
-    return res.status(401).json({ error: 'Invalid PIN' });
+// Used only by the admin UI to unlock the summary cards (net/gross totals).
+// The underlying metrics data below is NOT gated by this — tabs, calendar,
+// and per-transaction detail stay open; only the cumulative summary cards
+// are meant to be hidden from casual viewing.
+app.get('/api/admin/verify-pin', (req, res) => {
+  res.json({ ok: req.query.pin === METRICS_PIN });
+});
 
+app.get('/api/admin/metrics', (req, res) => {
   const period  = req.query.period || 'month';
   const data    = db.getMetrics(period);
 

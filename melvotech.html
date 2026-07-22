@@ -63,6 +63,12 @@ tr:hover td{background:rgba(0,198,178,.03)}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 .pin-box{max-width:320px;margin:0 auto;text-align:center;padding:20px 0}
 .pin-input{font-size:1.6rem;letter-spacing:.5em;text-align:center;width:100%;background:var(--input-bg);border:1.5px solid var(--border);color:var(--white);border-radius:10px;padding:14px}
+.rev-lock-wrap{position:relative}
+.rev-lock-overlay{position:absolute;inset:0;background:rgba(10,22,40,.9);backdrop-filter:blur(4px);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px;text-align:center;z-index:5}
+.rev-lock-overlay.hidden{display:none}
+.rev-lock-icon{font-size:1.5rem;margin-bottom:2px}
+.rev-lock-label{font-size:.75rem;color:var(--muted);letter-spacing:.04em;margin-bottom:6px}
+.rev-lock-pin{font-size:1.2rem;letter-spacing:.4em;text-align:center;max-width:150px;background:var(--input-bg);border:1.5px solid var(--border);color:var(--white);border-radius:8px;padding:9px}
 .period-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
 .period-tab{background:var(--input-bg);border:1.5px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 16px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.06em;transition:all .2s}
 .period-tab.active{background:rgba(0,198,178,.12);border-color:var(--teal);color:var(--teal)}
@@ -200,17 +206,8 @@ tr:hover td{background:rgba(0,198,178,.03)}
       <button class="btn btn-sm btn-outline" onclick="closeMetrics()" style="margin-top:0">✕ Close</button>
     </div>
 
-    <!-- PIN gate -->
-    <div id="pinGate" class="pin-box">
-      <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px;letter-spacing:.06em;text-transform:uppercase">Enter Metrics PIN</div>
-      <input class="pin-input" type="password" id="metricsPin" maxlength="8" placeholder="····"
-        onkeydown="if(event.key==='Enter') checkPin()"/>
-      <button class="btn btn-teal" style="max-width:200px;margin:14px auto 0" onclick="checkPin()">View Metrics</button>
-      <div id="pinError" style="color:var(--red);font-size:.8rem;margin-top:10px;display:none">Incorrect PIN. Try again.</div>
-    </div>
-
-    <!-- Metrics content (hidden until PIN correct) -->
-    <div id="metricsContent" style="display:none">
+    <!-- Metrics content — always visible; only the summary cards below are PIN-locked -->
+    <div id="metricsContent" style="display:block">
       <!-- Period tabs -->
       <div class="period-tabs">
         <button class="period-tab active" onclick="switchPeriod('day',this)">Today</button>
@@ -219,29 +216,40 @@ tr:hover td{background:rgba(0,198,178,.03)}
         <button class="period-tab" onclick="switchPeriod('year',this)">This Year</button>
       </div>
 
-      <!-- Summary cards -->
-      <div class="rev-grid">
-        <div class="rev-card">
-          <div class="rc-val" id="mNetTotal">—</div>
-          <div class="rc-lbl">Net Revenue</div>
+      <!-- Summary cards (PIN-locked) -->
+      <div class="rev-lock-wrap">
+        <div class="rev-grid">
+          <div class="rev-card">
+            <div class="rc-val" id="mNetTotal">—</div>
+            <div class="rc-lbl">Net Revenue</div>
+          </div>
+          <div class="rev-card">
+            <div class="rc-val" id="mGrossTotal">—</div>
+            <div class="rc-lbl">Gross Revenue</div>
+          </div>
+          <div class="rev-card">
+            <div class="rc-val" id="mCount">—</div>
+            <div class="rc-lbl">Vouchers Sold</div>
+          </div>
+          <div class="rev-card">
+            <div class="rc-val" id="mMmNet" style="color:#ffc800">—</div>
+            <div class="rc-lbl">Mobile Money (96%)</div>
+          </div>
+          <div class="rev-card">
+            <div class="rc-val" id="mVNet" style="color:#a78bfa">—</div>
+            <div class="rc-lbl">Cash Vouchers</div>
+          </div>
         </div>
-        <div class="rev-card">
-          <div class="rc-val" id="mGrossTotal">—</div>
-          <div class="rc-lbl">Gross Revenue</div>
-        </div>
-        <div class="rev-card">
-          <div class="rc-val" id="mCount">—</div>
-          <div class="rc-lbl">Vouchers Sold</div>
-        </div>
-        <div class="rev-card">
-          <div class="rc-val" id="mMmNet" style="color:#ffc800">—</div>
-          <div class="rc-lbl">Mobile Money (96%)</div>
-        </div>
-        <div class="rev-card">
-          <div class="rc-val" id="mVNet" style="color:#a78bfa">—</div>
-          <div class="rc-lbl">Cash Vouchers</div>
+        <div class="rev-lock-overlay" id="revLockOverlay">
+          <div class="rev-lock-icon">🔒</div>
+          <div class="rev-lock-label">Summary totals are PIN-protected</div>
+          <input class="rev-lock-pin" type="password" id="revLockPin" maxlength="8" placeholder="····"
+            onkeydown="if(event.key==='Enter') unlockSummary()"/>
+          <button class="btn btn-sm btn-teal" style="max-width:140px;margin-top:8px" onclick="unlockSummary()">Unlock</button>
+          <div id="revLockError" style="color:var(--red);font-size:.72rem;margin-top:6px;display:none">Incorrect PIN.</div>
         </div>
       </div>
+      <div style="text-align:right;margin:-14px 0 24px" id="revLockToggleWrap"></div>
 
       <!-- Calendar heatmap -->
       <div id="calSection">
@@ -537,41 +545,55 @@ function fmtDur(str) {
 
 // ── Metrics ───────────────────────────────────────────────────────────────────
 var metricsPinOk  = false;
-var currentPeriod = 'month';
-var metricsPin    = '';
+var currentPeriod = 'day';
 
 function openMetrics() {
   document.getElementById('metricsModal').classList.add('open');
-  document.getElementById('metricsPin').value = '';
-  document.getElementById('pinError').style.display = 'none';
-  if (!metricsPinOk) {
-    document.getElementById('pinGate').style.display     = 'block';
-    document.getElementById('metricsContent').style.display = 'none';
-  } else {
-    loadMetrics(currentPeriod);
-  }
-  setTimeout(() => document.getElementById('metricsPin').focus(), 100);
+  updateRevLockUI();
+  loadMetrics(currentPeriod);
 }
 
 function closeMetrics() {
   document.getElementById('metricsModal').classList.remove('open');
 }
 
-async function checkPin() {
-  const entered = document.getElementById('metricsPin').value.trim();
-  // Test the PIN against the server — server rejects with 401 if wrong
-  const r = await fetch(API + '/api/admin/metrics?pin=' + encodeURIComponent(entered) + '&period=day');
-  if (r.status === 401) {
-    document.getElementById('pinError').style.display = 'block';
-    document.getElementById('metricsPin').value = '';
-    return;
+async function unlockSummary() {
+  const entered = document.getElementById('revLockPin').value.trim();
+  const errEl   = document.getElementById('revLockError');
+  try {
+    const r    = await fetch(API + '/api/admin/verify-pin?pin=' + encodeURIComponent(entered));
+    const data = await r.json();
+    if (!data.ok) {
+      errEl.textContent = 'Incorrect PIN.';
+      errEl.style.display = 'block';
+      document.getElementById('revLockPin').value = '';
+      return;
+    }
+    metricsPinOk = true;
+    errEl.style.display = 'none';
+    updateRevLockUI();
+  } catch (e) {
+    errEl.textContent = 'Network error — try again.';
+    errEl.style.display = 'block';
   }
-  metricsPin    = entered;
-  metricsPinOk  = true;
-  document.getElementById('pinGate').style.display        = 'none';
-  document.getElementById('metricsContent').style.display = 'block';
-  document.getElementById('pinError').style.display       = 'none';
-  loadMetrics(currentPeriod);
+}
+
+function lockSummary() {
+  metricsPinOk = false;
+  updateRevLockUI();
+}
+
+function updateRevLockUI() {
+  const overlay = document.getElementById('revLockOverlay');
+  const toggleWrap = document.getElementById('revLockToggleWrap');
+  if (metricsPinOk) {
+    overlay.classList.add('hidden');
+    toggleWrap.innerHTML = '<button class="btn btn-sm btn-outline" style="margin-top:0" onclick="lockSummary()">🔒 Hide totals</button>';
+  } else {
+    overlay.classList.remove('hidden');
+    document.getElementById('revLockPin').value = '';
+    toggleWrap.innerHTML = '';
+  }
 }
 
 function switchPeriod(period, btn) {
@@ -583,7 +605,7 @@ function switchPeriod(period, btn) {
 
 async function loadMetrics(period) {
   try {
-    const r    = await fetch(`${API}/api/admin/metrics?pin=${encodeURIComponent(metricsPin)}&period=${period}`);
+    const r    = await fetch(`${API}/api/admin/metrics?period=${period}`);
     const data = await r.json();
     renderMetrics(data, period);
   } catch(e) {
