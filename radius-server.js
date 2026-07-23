@@ -117,16 +117,39 @@ authServer.on('message', (msg, rinfo) => {
   // second device instead of letting two devices share the same session.
   // (When isMacAuth is true, the voucher was found via its own MAC binding,
   // so it can only ever match the device that's already using it.)
-  if (!isMacAuth && db.isVoucherActiveElsewhere(voucher.code, mac)) {
-    console.log(`[AUTH] REJECTED: ${username} — voucher already in use on another device (active MAC: ${voucher.active_mac})`);
-    const resp = radius.encode_response({
-      packet:  packet,
-      code:    'Access-Reject',
-      secret:  RADIUS_SECRET,
-      attributes: [['Reply-Message', 'This voucher is already in use on another device. Please disconnect it first.']]
-    });
-    authServer.send(resp, rinfo.port, rinfo.address);
-    return;
+   if (!isMacAuth && db.isVoucherActiveElsewhere(voucher.code, mac)) {
+    const stillLive = await isMacActiveOnRouter(voucher.active_mac);
+
+    if (stillLive === false) {
+      // Old MAC is confirmed gone (rotated/disconnected) — release it
+      console.log(`[AUTH] Stale binding: ${voucher.active_mac} no longer active on router — releasing ${voucher.code} for new MAC ${mac}`);
+      db.clearActiveBinding(voucher.code);
+      // falls through to Access-Accept below
+    } else {
+      // stillLive === true, or null (router unreachable) — fail safe, reject
+      console.log(`[AUTH] REJECTED: ${username} — voucher already in use on another device (active MAC: ${voucher.active_mac})`);
+      const resp = radius.encode_response({
+        packet, code: 'Access-Reject', secret: RADIUS_SECRET,
+        attributes: [['Reply-Message', 'This voucher is already in use on another device. Please disconnect it first.']]
+      });
+      authServer.send(resp, rinfo.port, rinfo.address);
+      return;
+    }
+  }
+
+  async function isMacActiveOnRouter(mac) {
+  if (!mac) return null; // unknown
+  try {
+    const url = `http://${ROUTER_HOST}/rest/ip/hotspot/active`;
+    const auth = 'Basic ' + Buffer.from(`${ROUTER_USER}:${ROUTER_PASS}`).toString('base64');
+    const resp = await fetch(url, { headers: { Authorization: auth } });
+    if (!resp.ok) return null; // router unreachable — unknown
+    const active = await resp.json();
+    return active.some(a => (a['mac-address'] || '').toUpperCase() === mac.toUpperCase());
+  } catch (e) {
+    console.error('[REST] Failed to check active sessions:', e.message);
+    return null; // unknown
+  }
   }
 
   const mins = Math.floor(voucher.remaining_seconds / 60);

@@ -192,6 +192,13 @@ module.exports = {
     return row.active_mac !== mac.toUpperCase();
   },
 
+  //clearing old maac 
+  clearActiveBinding(code) {
+  db.prepare(`UPDATE vouchers SET active_mac = NULL, active_session_id = NULL WHERE code = ?`)
+    .run(code);
+  console.log(`[DB] Cleared stale active binding for voucher ${code}`);
+},
+
   // ── RADIUS Accounting: Interim-Update ────────────────────────────────────
   // Track actual connected seconds for reporting (not used for remaining time).
   updateSession(sessionId, cumulativeSeconds) {
