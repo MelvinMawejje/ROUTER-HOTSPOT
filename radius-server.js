@@ -59,12 +59,30 @@ async function disableHotspotUser(mac) {
   }
 }
 
+// ── Helper: is this MAC currently a live session on the router? ─────────
+// Returns true/false when we got a real answer, or null when we couldn't
+// tell (router unreachable/timeout) — callers should fail safe on null.
+async function isMacActiveOnRouter(mac) {
+  if (!mac) return null; // unknown
+  try {
+    const url = `http://${ROUTER_HOST}/rest/ip/hotspot/active`;
+    const auth = 'Basic ' + Buffer.from(`${ROUTER_USER}:${ROUTER_PASS}`).toString('base64');
+    const resp = await fetch(url, { headers: { Authorization: auth } });
+    if (!resp.ok) return null; // router unreachable — unknown
+    const active = await resp.json();
+    return active.some(a => (a['mac-address'] || '').toUpperCase() === mac.toUpperCase());
+  } catch (e) {
+    console.error('[REST] Failed to check active sessions:', e.message);
+    return null; // unknown
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // Authentication server (UDP 1812)
 // ════════════════════════════════════════════════════════════════════════════════
 const authServer = dgram.createSocket('udp4');
 
-authServer.on('message', (msg, rinfo) => {
+authServer.on('message', async (msg, rinfo) => {
   let packet;
   try {
     packet = radius.decode({ packet: msg, secret: RADIUS_SECRET });
@@ -113,11 +131,16 @@ authServer.on('message', (msg, rinfo) => {
   }
 
   // ── Enforce one active device per voucher ─────────────────────────────
-  // If this voucher is already connected on a different MAC, reject this
-  // second device instead of letting two devices share the same session.
+  // If this voucher is already connected on a different MAC, don't reject
+  // outright — first check whether that old MAC is actually still a live
+  // session on the router. iOS Private Wi-Fi Address rotation means the
+  // rightful owner can show up as a "new" MAC without ever cleanly
+  // disconnecting the old one, so a stale active_mac shouldn't lock them
+  // out forever. Only reject when the old MAC is confirmed still live
+  // (real second device) or when we can't verify (fail safe).
   // (When isMacAuth is true, the voucher was found via its own MAC binding,
   // so it can only ever match the device that's already using it.)
-   if (!isMacAuth && db.isVoucherActiveElsewhere(voucher.code, mac)) {
+  if (!isMacAuth && db.isVoucherActiveElsewhere(voucher.code, mac)) {
     const stillLive = await isMacActiveOnRouter(voucher.active_mac);
 
     if (stillLive === false) {
@@ -135,21 +158,6 @@ authServer.on('message', (msg, rinfo) => {
       authServer.send(resp, rinfo.port, rinfo.address);
       return;
     }
-  }
-
-  async function isMacActiveOnRouter(mac) {
-  if (!mac) return null; // unknown
-  try {
-    const url = `http://${ROUTER_HOST}/rest/ip/hotspot/active`;
-    const auth = 'Basic ' + Buffer.from(`${ROUTER_USER}:${ROUTER_PASS}`).toString('base64');
-    const resp = await fetch(url, { headers: { Authorization: auth } });
-    if (!resp.ok) return null; // router unreachable — unknown
-    const active = await resp.json();
-    return active.some(a => (a['mac-address'] || '').toUpperCase() === mac.toUpperCase());
-  } catch (e) {
-    console.error('[REST] Failed to check active sessions:', e.message);
-    return null; // unknown
-  }
   }
 
   const mins = Math.floor(voucher.remaining_seconds / 60);
