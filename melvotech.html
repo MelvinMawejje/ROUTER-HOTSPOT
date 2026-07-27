@@ -422,6 +422,11 @@ function printVouchers() {
 // so these codes never appear again in future print runs
 window.onafterprint = async function() {
   if (!pendingPrintCodes.length) return;
+  const confirmed = confirm(`Did the ${pendingPrintCodes.length} vouchers print successfully?\n\nOnly confirm if they actually came out of the printer — cancelling this does NOT undo the print job.`);
+  if (!confirmed) {
+    pendingPrintCodes = [];
+    return;
+  }
   try {
     const r = await fetch(API + '/api/admin/vouchers/mark-printed', {
       method: 'POST',
