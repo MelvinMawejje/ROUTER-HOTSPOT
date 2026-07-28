@@ -172,6 +172,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
     </select>
     <label>Code Length</label>
     <select id="genLength">
+      <option value="6">6 characters</option>
       <option value="8">8 characters</option>
       <option value="10">10 characters</option>
       <option value="12">12 characters</option>
@@ -540,9 +541,10 @@ function fmtSec(s) {
 
 function fmtDur(str) {
   if (!str || str === '0s') return '0m';
-  const m = str.match(/(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
+  const m = str.match(/(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
   if (!m) return str;
-  const d=parseInt(m[1])||0, h=parseInt(m[2])||0, mn=parseInt(m[3])||0;
+  const w = parseInt(m[1]) || 0, d = parseInt(m[2]) || 0, h = parseInt(m[3]) || 0, mn = parseInt(m[4]) || 0;
+  if (w) return `${w}w ${d}d`;
   if (d) return `${d}d ${h}h`;
   if (h) return `${h}h ${mn}m`;
   return `${mn}m`;
