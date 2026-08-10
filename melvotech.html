@@ -172,7 +172,6 @@ tr:hover td{background:rgba(0,198,178,.03)}
     </select>
     <label>Code Length</label>
     <select id="genLength">
-      <option value="6">6 characters</option>
       <option value="8">8 characters</option>
       <option value="10">10 characters</option>
       <option value="12">12 characters</option>
@@ -191,6 +190,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
         <tbody id="sessionTable"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
       </table>
     </div>
+    <div id="sessionPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:.8rem;color:var(--muted)"></div>
   </div>
 
 </div><!-- /two-column grid -->
@@ -423,6 +423,9 @@ function printVouchers() {
 // so these codes never appear again in future print runs
 window.onafterprint = async function() {
   if (!pendingPrintCodes.length) return;
+  // afterprint fires whether the operator actually printed OR hit Cancel —
+  // browsers don't distinguish the two. Ask explicitly before marking
+  // anything as printed, so a cancelled print job doesn't hide vouchers.
   const confirmed = confirm(`Did the ${pendingPrintCodes.length} vouchers print successfully?\n\nOnly confirm if they actually came out of the printer — cancelling this does NOT undo the print job.`);
   if (!confirmed) {
     pendingPrintCodes = [];
@@ -446,28 +449,60 @@ window.onafterprint = async function() {
 };
 
 // ── Live sessions ─────────────────────────────────────────────────────────────
+const SESSIONS_PAGE_SIZE = 20;
+let sessionPage = 0;
+let allSessions = [];
+
 async function loadSessions() {
   try {
     const r    = await fetch(API + '/api/admin/sessions');
     const data = await r.json();
-    const rows = data.sessions || [];
-    document.getElementById('statActive').textContent = rows.length;
+    allSessions = data.sessions || [];
+    document.getElementById('statActive').textContent = allSessions.length;
 
-    const tbody = document.getElementById('sessionTable');
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No active sessions</td></tr>';
-      return;
-    }
-    tbody.innerHTML = rows.map(s => `<tr>
-      <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${s.user}</td>
-      <td>${fmtDur(s.uptime)}</td>
-      <td>${s['session-time-left'] ? fmtDur(s['session-time-left']) : '∞'}</td>
-      <td style="color:var(--muted);font-size:.78rem">${s.address || '—'}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="kickSession('${s.user}')">Kick</button></td>
-    </tr>`).join('');
+    // Don't strand the admin on a page that no longer exists once
+    // sessions drop off (e.g. someone disconnects)
+    const maxPage = Math.max(0, Math.ceil(allSessions.length / SESSIONS_PAGE_SIZE) - 1);
+    if (sessionPage > maxPage) sessionPage = maxPage;
+
+    renderSessionPage();
   } catch(e) {
     console.error(e);
   }
+}
+
+function renderSessionPage() {
+  const tbody = document.getElementById('sessionTable');
+  const pager = document.getElementById('sessionPager');
+
+  if (!allSessions.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No active sessions</td></tr>';
+    pager.innerHTML = '';
+    return;
+  }
+
+  const start    = sessionPage * SESSIONS_PAGE_SIZE;
+  const pageRows = allSessions.slice(start, start + SESSIONS_PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(s => `<tr>
+    <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${s.user}</td>
+    <td>${fmtDur(s.uptime)}</td>
+    <td>${s['session-time-left'] ? fmtDur(s['session-time-left']) : '∞'}</td>
+    <td style="color:var(--muted);font-size:.78rem">${s.address || '—'}</td>
+    <td><button class="btn btn-sm btn-danger" onclick="kickSession('${s.user}')">Kick</button></td>
+  </tr>`).join('');
+
+  const totalPages = Math.ceil(allSessions.length / SESSIONS_PAGE_SIZE);
+  pager.innerHTML = totalPages <= 1 ? '' : `
+    <button class="btn btn-sm btn-outline" style="width:auto" onclick="changeSessionPage(-1)" ${sessionPage === 0 ? 'disabled' : ''}>← Prev</button>
+    <span>Page ${sessionPage + 1} of ${totalPages} (${allSessions.length} total)</span>
+    <button class="btn btn-sm btn-outline" style="width:auto" onclick="changeSessionPage(1)" ${sessionPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+  `;
+}
+
+function changeSessionPage(delta) {
+  sessionPage += delta;
+  renderSessionPage();
 }
 
 // ── Generate vouchers ─────────────────────────────────────────────────────────
@@ -541,9 +576,12 @@ function fmtSec(s) {
 
 function fmtDur(str) {
   if (!str || str === '0s') return '0m';
+  // RouterOS prefixes durations over a week with "w" (e.g. "4w2d3h4m5s") —
+  // without the (?:(\d+)w)? group here, long-duration vouchers (1-month)
+  // fail to match entirely and silently render as 0.
   const m = str.match(/(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/);
   if (!m) return str;
-  const w = parseInt(m[1]) || 0, d = parseInt(m[2]) || 0, h = parseInt(m[3]) || 0, mn = parseInt(m[4]) || 0;
+  const w=parseInt(m[1])||0, d=parseInt(m[2])||0, h=parseInt(m[3])||0, mn=parseInt(m[4])||0;
   if (w) return `${w}w ${d}d`;
   if (d) return `${d}d ${h}h`;
   if (h) return `${h}h ${mn}m`;

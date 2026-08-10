@@ -70,6 +70,23 @@ async function mikrotikFetch(endpoint, options = {}, attempt = 1) {
   }
 }
 
+// ── Force-remove any active hotspot session for a given MAC ──────────────
+// Used when a transaction-ID lookup needs to reclaim a voucher whose
+// active_mac is stale (e.g. the customer's device rotated its MAC).
+async function forceDisconnectMac(mac) {
+  if (!mac) return;
+  const active  = await mikrotikFetch('/ip/hotspot/active');
+  const matches = active.filter(a => (a['mac-address'] || '').toUpperCase() === mac.toUpperCase());
+  for (const session of matches) {
+    if (session['.id']) {
+      await mikrotikFetch('/ip/hotspot/active/remove', {
+        method: 'POST',
+        body:   JSON.stringify({ '.id': session['.id'] }),
+      });
+    }
+  }
+}
+
 // ─── Helper: get client MAC address from router's DHCP leases ──
 async function getMacFromIp(clientIp) {
   const leases = await mikrotikFetch('/ip/dhcp-server/lease');
@@ -250,7 +267,7 @@ app.post('/api/pay/connect', async (req, res) => {
 // Lets a user who got disconnected (e.g. router reboot, MAC binding lost)
 // paste the transaction ID from their mobile money payment to recover their
 // voucher code and reconnect, instead of having to pay again.
-app.post('/api/voucher/lookup-by-transaction', (req, res) => {
+app.post('/api/voucher/lookup-by-transaction', async (req, res) => {
   const transactionId = (req.body.transactionId || '').trim();
   const mac = (req.body.mac || '').trim();
   if (!transactionId)
@@ -267,10 +284,20 @@ app.post('/api/voucher/lookup-by-transaction', (req, res) => {
   if (voucher.remaining_seconds <= 0)
     return res.status(400).json({ success: false, message: 'This voucher has expired — all session time has been used.' });
 
-  // Don't let a retrieved voucher walk straight into the same "already in
-  // use" wall RADIUS would hit — tell the user here instead.
-  if (db.isVoucherActiveElsewhere(voucher.code, mac))
-    return res.status(409).json({ success: false, message: 'This voucher is already connected on another device. Please disconnect it there first, then try again here.' });
+  // Knowing the transaction ID is proof of ownership straight from the
+  // customer's payment SMS — stronger than a MAC match. If the voucher is
+  // currently bound to a different MAC (e.g. iPhone Private Wi-Fi Address
+  // rotated), release that binding and boot the stale session off the
+  // router so this device can claim it immediately.
+  if (voucher.active_mac && mac && voucher.active_mac !== mac.toUpperCase()) {
+    console.log(`[txn-lookup] Overriding active MAC ${voucher.active_mac} -> ${mac.toUpperCase()} for voucher ${voucher.code} (txn ${transactionId})`);
+    try {
+      await forceDisconnectMac(voucher.active_mac);
+    } catch (e) {
+      console.error('[txn-lookup] force-disconnect failed (non-fatal):', e.message);
+    }
+    db.clearActiveBinding(voucher.code);
+  }
 
   res.json({
     success:           true,
