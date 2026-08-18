@@ -61,6 +61,24 @@ try { db.exec(`
     bound_at TEXT DEFAULT (datetime('now', '+3 hours'))
   )
 `); } catch(e) {}
+// pending_payments: created the moment we ask IOTEC to collect money, BEFORE
+// we know whether it succeeds. Stores what the transaction was FOR (phone +
+// package) so that whichever path hears about success first — the client
+// calling /api/pay/connect, or the IOTEC webhook — can create the voucher.
+// This is what closes the "money deducted but no voucher" gap: the webhook
+// only ever gets a transaction ID + status, not the original phone/package,
+// so without this table it would have nothing to create a voucher FROM.
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_payments (
+    transaction_id TEXT PRIMARY KEY,
+    phone          TEXT NOT NULL,
+    package_id     TEXT NOT NULL,
+    voucher_code   TEXT,
+    status         TEXT NOT NULL DEFAULT 'pending',
+    created_at     TEXT DEFAULT (datetime('now', '+3 hours')),
+    completed_at   TEXT
+  )
+`); } catch(e) {}
 // active_mac / active_session_id track which single device currently "holds"
 // the voucher, so a second device can't log in with the same code while the
 // first is still connected.
@@ -140,6 +158,34 @@ module.exports = {
     db.prepare(`UPDATE vouchers SET transaction_id = ? WHERE code = ?`)
       .run(String(transactionId).trim(), code);
     console.log(`[DB] Voucher ${code} linked to transaction ${transactionId}`);
+  },
+
+  // ── Pending payments (for the IOTEC webhook) ──────────────────
+  // Recorded the instant we ask IOTEC to collect, before we know the
+  // outcome. Lets a later webhook call — which only knows the transaction
+  // ID and status — look up what package/phone it was for.
+  savePendingPayment(transactionId, phone, packageId) {
+    if (!transactionId) return;
+    db.prepare(`
+      INSERT OR IGNORE INTO pending_payments (transaction_id, phone, package_id)
+      VALUES (?, ?, ?)
+    `).run(String(transactionId).trim(), phone, packageId);
+    console.log(`[DB] Pending payment recorded: ${transactionId} (${packageId}, ${phone})`);
+  },
+
+  getPendingPayment(transactionId) {
+    if (!transactionId) return null;
+    return db.prepare('SELECT * FROM pending_payments WHERE transaction_id = ?')
+      .get(String(transactionId).trim());
+  },
+
+  markPendingPaymentComplete(transactionId, voucherCode) {
+    if (!transactionId) return;
+    db.prepare(`
+      UPDATE pending_payments
+      SET voucher_code = ?, status = 'completed', completed_at = datetime('now', '+3 hours')
+      WHERE transaction_id = ?
+    `).run(voucherCode, String(transactionId).trim());
   },
 
   // ── Bind MAC to voucher (overwrites old binding) ──────────────

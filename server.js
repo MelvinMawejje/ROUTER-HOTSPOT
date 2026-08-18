@@ -204,6 +204,24 @@ app.post('/api/pay', async (req, res) => {
     if (!response.ok) {
       return res.status(response.status).json({ error: data.message || data.title || 'Payment initiation failed.' });
     }
+
+    // Record what this transaction is FOR before we tell the client
+    // anything — so if their tab dies right after this, the webhook still
+    // has enough information to create the voucher independently.
+    // NOTE: confirm the actual ID field IOTEC returns here (checking both
+    // `id` and `transactionId` as a safety net — remove whichever is wrong
+    // once confirmed against a real response).
+    const iotecTxnId = data.id || data.transactionId;
+    if (iotecTxnId) {
+      try {
+        db.savePendingPayment(iotecTxnId, phone, packageId);
+      } catch (e) {
+        console.error('[pending-payment] save failed (non-fatal):', e.message);
+      }
+    } else {
+      console.warn('[pay] No transaction ID found in IOTEC response — webhook fallback will not work for this payment:', JSON.stringify(data));
+    }
+
     res.json(data);
 
   } catch (err) {
@@ -212,44 +230,73 @@ app.post('/api/pay', async (req, res) => {
   }
 });
 
-// ─── Auto‑connect after payment ──────────────────────────────────────────────
+// ─── Shared: create (or return existing) voucher for a completed payment ────
+// Idempotent on transactionId. Both the client-triggered route below AND the
+// IOTEC webhook call this — whichever fires first actually creates the
+// voucher; the other becomes a no-op that just hands back the same code.
+// This is the piece that prevents double-crediting revenue if both paths
+// fire for the same payment.
+//
 // NOTE: We intentionally do NOT create a local MikroTik hotspot user here.
 // If a local user exists, MikroTik authenticates it locally and never sends
 // RADIUS accounting — so expires_at never gets set and the wall-clock timer
 // never starts. Keeping the voucher in RADIUS only (our db) forces MikroTik
 // to go through RADIUS for auth AND accounting, which is what we want.
+function createVoucherForPayment(phone, packageId, transactionId) {
+  if (transactionId) {
+    const existing = db.getVoucherByTransactionId(transactionId);
+    if (existing) return { voucherCode: existing.code, alreadyExisted: true };
+  }
+
+  // Generate PAY + 8 alphanumeric chars, no hyphens (e.g. PAY3F7K9XZ)
+  // Same charset as admin vouchers — no ambiguous chars (0/O/1/I/L)
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let voucherCode = 'PAY';
+  for (let i = 0; i < 8; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
+
+  // Register in our database — RADIUS handles authentication from here
+  db.createVoucher(voucherCode, packageId);
+
+  // Link this voucher to the IOTEC transaction ID so the user can retrieve
+  // it later (e.g. after getting disconnected) by pasting the transaction
+  // ID back into the portal.
+  if (transactionId) {
+    try {
+      db.bindTransactionId(voucherCode, transactionId);
+    } catch (e) {
+      console.error('[txn-link] bindTransactionId failed (non-fatal):', e.message);
+    }
+  }
+
+  // Record revenue (96% net for mobile money) — non-fatal if DB not ready
+  try {
+    db.recordRevenue(voucherCode, packageId, 'mobile_money');
+  } catch (e) {
+    console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
+  }
+
+  if (transactionId) {
+    try {
+      db.markPendingPaymentComplete(transactionId, voucherCode);
+    } catch (e) {
+      console.error('[pending-payment] mark complete failed (non-fatal):', e.message);
+    }
+  }
+
+  return { voucherCode, alreadyExisted: false };
+}
+
+// ─── Auto‑connect after payment (client-triggered path) ─────────────────────
+// Fires when the customer's browser is still alive and sees the payment
+// succeed. The webhook below is the independent, server-side backstop for
+// when it isn't.
 app.post('/api/pay/connect', async (req, res) => {
   const { phone, packageId, transactionId } = req.body;
   if (!phone || !packageId)
     return res.status(400).json({ success: false, message: 'Missing phone or package ID.' });
 
   try {
-    // Generate PAY + 8 alphanumeric chars, no hyphens (e.g. PAY3F7K9XZ)
-    // Same charset as admin vouchers — no ambiguous chars (0/O/1/I/L)
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-    let voucherCode = 'PAY';
-    for (let i = 0; i < 8; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
-
-    // Register in our database — RADIUS handles authentication from here
-    db.createVoucher(voucherCode, packageId);
-
-    // Link this voucher to the IOTEC transaction ID so the user can
-    // retrieve it later (e.g. after getting disconnected) by pasting
-    // the transaction ID back into the portal.
-    if (transactionId) {
-      try {
-        db.bindTransactionId(voucherCode, transactionId);
-      } catch (e) {
-        console.error('[txn-link] bindTransactionId failed (non-fatal):', e.message);
-      }
-    }
-
-    // Record revenue (96% net for mobile money) — non-fatal if DB not ready
-    try {
-      db.recordRevenue(voucherCode, packageId, 'mobile_money');
-    } catch (e) {
-      console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
-    }
+    const { voucherCode } = createVoucherForPayment(phone, packageId, transactionId);
 
     res.json({
       success:     true,
@@ -260,6 +307,75 @@ app.post('/api/pay/connect', async (req, res) => {
   } catch (err) {
     console.error('Pay/connect error:', err.message);
     res.status(500).json({ success: false, message: err.message || 'Server error.' });
+  }
+});
+
+// ─── IOTEC payment webhook (server-side backstop) ────────────────────────────
+// Server-to-server notification the instant a collection succeeds or fails —
+// independent of whether the customer's browser is still open. This is what
+// actually closes the "money deducted but no voucher" gap: /api/pay/connect
+// only fires if the client is alive to call it; this fires regardless.
+//
+// ACTION NEEDED: register this URL (http://139.84.226.141:3000/api/webhooks/iotec)
+// with IOTEC — check your merchant dashboard or ask their support where
+// webhook URLs get configured for your account, since it wasn't visible in
+// their public docs. Once you get a real sample payload from them, confirm
+// the field names below match (they're currently a best guess covering a
+// few common variants so this doesn't silently break on a name mismatch).
+app.post('/api/webhooks/iotec', async (req, res) => {
+  // IOTEC's callback auth: in the ioTec Pay portal (Wallet → Settings →
+  // Callback URLs), you set a "Security Header" — a header name/value pair
+  // (their example uses `Authorization`) that IOTEC then includes on every
+  // callback call. Set IOTEC_WEBHOOK_SECRET in .env to whatever value you
+  // configured there, and it'll be checked against the incoming Authorization
+  // header. If you picked a different header name in the portal, adjust
+  // `req.headers['authorization']` below to match.
+  const expectedSecret = process.env.IOTEC_WEBHOOK_SECRET;
+  if (expectedSecret) {
+    const gotSecret = req.headers['authorization'] || req.headers['x-webhook-secret'];
+    if (gotSecret !== expectedSecret) {
+      console.warn('[webhook] Rejected — bad/missing secret');
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+  }
+
+  const body = req.body || {};
+  console.log('[webhook] IOTEC payload:', JSON.stringify(body));
+
+  // Ack fast so IOTEC doesn't retry-storm us on a slow response — real work
+  // happens after the response is sent.
+  res.json({ received: true });
+
+  const transactionId = body.id || body.transactionId || body.paymentId || body.vendorTransactionId;
+  const status = (body.status || body.transactionStatus || body.state || '').toString().toLowerCase();
+
+  if (!transactionId) {
+    console.warn('[webhook] No transaction ID found in payload — cannot process');
+    return;
+  }
+
+  const isSuccess = ['success', 'successful', 'completed', 'paid'].includes(status);
+  if (!isSuccess) {
+    console.log(`[webhook] Transaction ${transactionId} status=${status || 'unknown'} — not a success, skipping`);
+    return;
+  }
+
+  const pending = db.getPendingPayment(transactionId);
+  if (!pending) {
+    console.warn(`[webhook] Success for ${transactionId} but no matching pending payment on file — cannot determine package/phone. (Was /api/pay's transaction ID field name wrong?)`);
+    return;
+  }
+
+  if (pending.voucher_code) {
+    console.log(`[webhook] ${transactionId} already processed → voucher ${pending.voucher_code}`);
+    return;
+  }
+
+  try {
+    const { voucherCode, alreadyExisted } = createVoucherForPayment(pending.phone, pending.package_id, transactionId);
+    console.log(`[webhook] ${alreadyExisted ? 'Matched existing' : 'Created'} voucher ${voucherCode} for transaction ${transactionId}`);
+  } catch (e) {
+    console.error('[webhook] Failed to create voucher:', e.message);
   }
 });
 
