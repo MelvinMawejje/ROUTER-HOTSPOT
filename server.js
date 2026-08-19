@@ -323,20 +323,26 @@ app.post('/api/pay/connect', async (req, res) => {
 // the field names below match (they're currently a best guess covering a
 // few common variants so this doesn't silently break on a name mismatch).
 app.post('/api/webhooks/iotec', async (req, res) => {
-  // IOTEC's callback auth: in the ioTec Pay portal (Wallet → Settings →
-  // Callback URLs), you set a "Security Header" — a header name/value pair
-  // (their example uses `Authorization`) that IOTEC then includes on every
-  // callback call. Set IOTEC_WEBHOOK_SECRET in .env to whatever value you
-  // configured there, and it'll be checked against the incoming Authorization
-  // header. If you picked a different header name in the portal, adjust
-  // `req.headers['authorization']` below to match.
-  const expectedSecret = process.env.IOTEC_WEBHOOK_SECRET;
+  // IOTEC's callback auth, confirmed with their support: a custom header
+  // named "mbuya-wifi-auth" is sent on every callback call, with a value
+  // set in the ioTec Pay portal (Wallet → Settings → Callback URLs).
+  //
+  // ⚠️ SECURITY NOTE: the current configured value ("1") is a placeholder
+  // for testing. Anyone who guesses it can hit this endpoint and mint free
+  // vouchers. Once the full flow is confirmed working end-to-end, generate
+  // a long random value (e.g. `openssl rand -hex 32`), update it in BOTH
+  // the ioTec Pay portal and IOTEC_WEBHOOK_SECRET in .env, then restart.
+  const WEBHOOK_HEADER_NAME = process.env.IOTEC_WEBHOOK_HEADER_NAME || 'mbuya-wifi-auth';
+  const expectedSecret      = process.env.IOTEC_WEBHOOK_SECRET;
+
   if (expectedSecret) {
-    const gotSecret = req.headers['authorization'] || req.headers['x-webhook-secret'];
+    const gotSecret = req.headers[WEBHOOK_HEADER_NAME.toLowerCase()];
     if (gotSecret !== expectedSecret) {
-      console.warn('[webhook] Rejected — bad/missing secret');
+      console.warn(`[webhook] Rejected — "${WEBHOOK_HEADER_NAME}" header was "${gotSecret}", expected "${expectedSecret}"`);
       return res.status(401).json({ error: 'unauthorized' });
     }
+  } else {
+    console.warn('[webhook] WARNING: IOTEC_WEBHOOK_SECRET not set in .env — accepting all callbacks unauthenticated!');
   }
 
   const body = req.body || {};
