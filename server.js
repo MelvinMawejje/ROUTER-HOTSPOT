@@ -242,9 +242,20 @@ app.post('/api/pay', async (req, res) => {
 // RADIUS accounting — so expires_at never gets set and the wall-clock timer
 // never starts. Keeping the voucher in RADIUS only (our db) forces MikroTik
 // to go through RADIUS for auth AND accounting, which is what we want.
-function createVoucherForPayment(phone, packageId, transactionId) {
-  if (transactionId) {
-    const existing = db.getVoucherByTransactionId(transactionId);
+// internalTransactionId: IOTEC's own UUID — matches the pending_payments row
+//   created back in /api/pay. Used only to close out that row.
+// vendorTransactionId: the reference MTN/Airtel actually shows the customer
+//   (in their payment SMS). This is what gets bound to the voucher, since
+//   it's what the customer will paste back in to recover a lost voucher —
+//   IOTEC's internal UUID means nothing to them.
+function createVoucherForPayment(phone, packageId, internalTransactionId, vendorTransactionId) {
+  // Prefer the customer-facing ID for the idempotency check too, since
+  // that's what bindTransactionId stores below — falls back to the
+  // internal ID only if no vendor ID is available yet.
+  const linkId = vendorTransactionId || internalTransactionId;
+
+  if (linkId) {
+    const existing = db.getVoucherByTransactionId(linkId);
     if (existing) return { voucherCode: existing.code, alreadyExisted: true };
   }
 
@@ -257,12 +268,22 @@ function createVoucherForPayment(phone, packageId, transactionId) {
   // Register in our database — RADIUS handles authentication from here
   db.createVoucher(voucherCode, packageId);
 
-  // Link this voucher to the IOTEC transaction ID so the user can retrieve
-  // it later (e.g. after getting disconnected) by pasting the transaction
-  // ID back into the portal.
-  if (transactionId) {
+  // Mobile-money vouchers are delivered digitally and never physically
+  // printed — mark printed_at immediately so they don't clutter the admin
+  // dashboard's "unprinted" queue, which is meant for admin-generated
+  // vouchers awaiting physical printing.
+  try {
+    db.markPrinted([voucherCode]);
+  } catch (e) {
+    console.error('[print-exclude] markPrinted failed (non-fatal):', e.message);
+  }
+
+  // Link this voucher to the customer-facing transaction reference so the
+  // user can retrieve it later (e.g. after getting disconnected) by
+  // pasting the transaction ID from their MTN/Airtel SMS back into the portal.
+  if (linkId) {
     try {
-      db.bindTransactionId(voucherCode, transactionId);
+      db.bindTransactionId(voucherCode, linkId);
     } catch (e) {
       console.error('[txn-link] bindTransactionId failed (non-fatal):', e.message);
     }
@@ -275,9 +296,9 @@ function createVoucherForPayment(phone, packageId, transactionId) {
     console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
   }
 
-  if (transactionId) {
+  if (internalTransactionId) {
     try {
-      db.markPendingPaymentComplete(transactionId, voucherCode);
+      db.markPendingPaymentComplete(internalTransactionId, voucherCode);
     } catch (e) {
       console.error('[pending-payment] mark complete failed (non-fatal):', e.message);
     }
@@ -296,7 +317,13 @@ app.post('/api/pay/connect', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing phone or package ID.' });
 
   try {
-    const { voucherCode } = createVoucherForPayment(phone, packageId, transactionId);
+    // login.html already sends the customer-facing ID here (vendorTransactionId,
+    // falling back to the internal ID if IOTEC hadn't assigned one yet at the
+    // time of polling) — so this is the vendor param, not the internal one.
+    // We don't have the internal ID separately at this call site, which means
+    // the pending_payments row won't get marked complete via this path — that's
+    // fine, since the webhook (or the idempotency check above) handles that.
+    const { voucherCode } = createVoucherForPayment(phone, packageId, null, transactionId);
 
     res.json({
       success:     true,
@@ -352,34 +379,40 @@ app.post('/api/webhooks/iotec', async (req, res) => {
   // happens after the response is sent.
   res.json({ received: true });
 
-  const transactionId = body.id || body.transactionId || body.paymentId || body.vendorTransactionId;
+  // internalId: IOTEC's own UUID, matches the pending_payments row saved
+  // in /api/pay — used ONLY to find that row.
+  // vendorTransactionId: the reference MTN/Airtel show the customer —
+  // this is what actually gets bound to the voucher (see the comment on
+  // createVoucherForPayment above for why these can't be treated as one ID).
+  const internalId = body.id || body.transactionId || body.paymentId;
+  const vendorTransactionId = body.vendorTransactionId;
   const status = (body.status || body.transactionStatus || body.state || '').toString().toLowerCase();
 
-  if (!transactionId) {
+  if (!internalId) {
     console.warn('[webhook] No transaction ID found in payload — cannot process');
     return;
   }
 
   const isSuccess = ['success', 'successful', 'completed', 'paid'].includes(status);
   if (!isSuccess) {
-    console.log(`[webhook] Transaction ${transactionId} status=${status || 'unknown'} — not a success, skipping`);
+    console.log(`[webhook] Transaction ${internalId} status=${status || 'unknown'} — not a success, skipping`);
     return;
   }
 
-  const pending = db.getPendingPayment(transactionId);
+  const pending = db.getPendingPayment(internalId);
   if (!pending) {
-    console.warn(`[webhook] Success for ${transactionId} but no matching pending payment on file — cannot determine package/phone. (Was /api/pay's transaction ID field name wrong?)`);
+    console.warn(`[webhook] Success for ${internalId} but no matching pending payment on file — cannot determine package/phone. (Was /api/pay's transaction ID field name wrong?)`);
     return;
   }
 
   if (pending.voucher_code) {
-    console.log(`[webhook] ${transactionId} already processed → voucher ${pending.voucher_code}`);
+    console.log(`[webhook] ${internalId} already processed → voucher ${pending.voucher_code}`);
     return;
   }
 
   try {
-    const { voucherCode, alreadyExisted } = createVoucherForPayment(pending.phone, pending.package_id, transactionId);
-    console.log(`[webhook] ${alreadyExisted ? 'Matched existing' : 'Created'} voucher ${voucherCode} for transaction ${transactionId}`);
+    const { voucherCode, alreadyExisted } = createVoucherForPayment(pending.phone, pending.package_id, internalId, vendorTransactionId);
+    console.log(`[webhook] ${alreadyExisted ? 'Matched existing' : 'Created'} voucher ${voucherCode} for transaction ${internalId} (vendor ref: ${vendorTransactionId || 'none'})`);
   } catch (e) {
     console.error('[webhook] Failed to create voucher:', e.message);
   }
