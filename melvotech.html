@@ -309,7 +309,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
       </div>
 
       <!-- Monthly revenue trend — independent of the period tabs above -->
-      <div id="monthlyChartSection" style="margin-top:24px">
+      <div id="monthlyChartSection" style="margin-top:24px;display:none">
         <div class="card-title" style="margin-bottom:10px">Monthly Revenue Trend</div>
         <div class="chart-wrap">
           <svg id="monthlyChart" viewBox="0 0 640 220" preserveAspectRatio="xMidYMid meet"></svg>
@@ -766,7 +766,11 @@ function formatPeriodLabel(period, range, offset) {
     return `${start.getFullYear()}`;
   }
   // month
-  return `${months[start.getMonth()]} ${start.getFullYear()}`;
+  if (period === 'month'){
+    document.getElementById('monthlyChartSection').style.display = 'block';
+     return `${months[start.getMonth()]} ${start.getFullYear()}`;
+  }
+ 
 }
 
 function filterTx(src, btn) {
