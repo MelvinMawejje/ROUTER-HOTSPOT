@@ -84,6 +84,13 @@ try { db.exec(`
 // first is still connected.
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN active_mac TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN active_session_id TEXT`); } catch(e) {}
+// revenue_recorded_at: atomic "has revenue already been logged for this
+// voucher?" flag. Set the moment recordRevenue actually runs, in the SAME
+// SQL statement that checks it — closes the race where /api/voucher/redeem
+// gets hit more than once before RADIUS Accounting-Start sets first_used_at
+// (flaky captive portal, page reload, retyped code), which used to cause
+// recordRevenue to fire again on every retry.
+try { db.exec(`ALTER TABLE vouchers ADD COLUMN revenue_recorded_at TEXT`); } catch(e) {}
 
 const PROFILE_SECONDS = {
   'mini-day': 14400,
@@ -96,13 +103,20 @@ module.exports = {
   PROFILE_SECONDS,
 
   // ── Create voucher (admin generate or payment) ────────────────────────────
+  // Returns true if a NEW row was actually inserted, false if `code` already
+  // existed (INSERT OR IGNORE silently no-op'd). Callers that generate a
+  // random code should check this and retry on false — otherwise they'd
+  // carry on as if they'd created a fresh voucher when they actually just
+  // collided with an existing one (wrong profile/time, revenue mis-recorded
+  // against someone else's voucher, transaction_id reassigned, etc).
   createVoucher(code, profile) {
     const secs = PROFILE_SECONDS[profile] || 86400;
-    db.prepare(`
+    const result = db.prepare(`
       INSERT OR IGNORE INTO vouchers
         (code, profile, allocated_seconds, used_seconds, disabled)
       VALUES (?, ?, ?, 0, 0)
     `).run(code, profile, secs);
+    return result.changes > 0;
   },
 
   // ── Get voucher with WALL-CLOCK remaining time ────────────────────────────
@@ -295,13 +309,68 @@ module.exports = {
     `).run(code, profile, source, gross, net);
   },
 
+  // ── Record revenue exactly once per voucher ───────────────────────────────
+  // Atomically claims the voucher (UPDATE ... WHERE revenue_recorded_at IS NULL)
+  // and only inserts the revenue_events row if this call is the one that won
+  // the claim. Safe to call on every redeem attempt, however many times a
+  // user retries — duplicates are impossible because the claim and the
+  // "have I already recorded this?" check happen in the same statement.
+  // Returns true if revenue was recorded by this call, false if it was
+  // already recorded previously (nothing done).
+  tryRecordRevenue(code, profile, source) {
+    const claim = db.prepare(`
+      UPDATE vouchers SET revenue_recorded_at = datetime('now', '+3 hours')
+      WHERE code = ? AND revenue_recorded_at IS NULL
+    `).run(code);
+    if (claim.changes === 0) return false; // already recorded — no-op
+    this.recordRevenue(code, profile, source);
+    return true;
+  },
+
   // ── Metrics query ─────────────────────────────────────────────────────────
-  // Returns daily totals and per-day rows for the requested period
-  getMetrics(period) {
-    // period: 'day' | 'week' | 'month' | 'year'
-    const cutoffs = { day: 1, week: 7, month: 30, year: 365 };
-    const days    = cutoffs[period] || 30;
-    const rows    = db.prepare(`
+  // Returns calendar-aligned totals for the requested period.
+  // period: 'day' | 'week' | 'month' | 'year'
+  // offset: how many periods back from the CURRENT one — 0 = today/this
+  //   week/this month/this year, 1 = yesterday/last week/last month/last
+  //   year, 2 = two periods back, etc. Lets the admin UI page backwards
+  //   through history instead of only ever seeing the current period.
+  // Previously this used a rolling "last N days" window (e.g. "this month"
+  // = last 30 days), which silently drifted across month/week boundaries —
+  // on the 2nd of a new month "this month" still showed mostly last month.
+  // Boundaries are now real calendar periods: start of this
+  // day/week(Monday)/month/year through to the same point one period later.
+  getMetrics(period, offset) {
+    const off = Math.max(0, parseInt(offset) || 0);
+    let startExpr, endExpr;
+
+    switch (period) {
+      case 'day':
+        startExpr = `date('now', '+3 hours', '-${off} days')`;
+        endExpr   = `date(${startExpr}, '+1 day')`;
+        break;
+      case 'week': {
+        // Monday of the current week: step back 6 days, then roll forward
+        // to the next Monday — a standard SQLite idiom that's correct even
+        // when "now" already falls on a Monday.
+        const mondayExpr = `date('now', '+3 hours', '-6 days', 'weekday 1')`;
+        startExpr = `date(${mondayExpr}, '-${off * 7} days')`;
+        endExpr   = `date(${startExpr}, '+7 days')`;
+        break;
+      }
+      case 'year':
+        startExpr = `date('now', '+3 hours', 'start of year', '-${off} years')`;
+        endExpr   = `date(${startExpr}, '+1 year')`;
+        break;
+      case 'month':
+      default:
+        startExpr = `date('now', '+3 hours', 'start of month', '-${off} months')`;
+        endExpr   = `date(${startExpr}, '+1 month')`;
+        break;
+    }
+
+    const range = db.prepare(`SELECT ${startExpr} AS start, ${endExpr} AS end`).get();
+
+    const rows = db.prepare(`
       SELECT
         date(recorded_at) AS day,
         SUM(gross_ugx)    AS gross,
@@ -310,10 +379,10 @@ module.exports = {
         SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
         SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
+      WHERE recorded_at >= ? AND recorded_at < ?
       GROUP BY date(recorded_at)
       ORDER BY day ASC
-    `).all();
+    `).all(range.start, range.end);
 
     const totals = db.prepare(`
       SELECT
@@ -323,20 +392,65 @@ module.exports = {
         SUM(CASE WHEN source='mobile_money' THEN net_ugx ELSE 0 END) AS mm_net,
         SUM(CASE WHEN source='voucher'      THEN net_ugx ELSE 0 END) AS v_net
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
-    `).get();
+      WHERE recorded_at >= ? AND recorded_at < ?
+    `).get(range.start, range.end);
 
     const events = db.prepare(`
-      SELECT code, profile, source, gross_ugx, net_ugx, recorded_at
+      SELECT code, profile, source, gross_ugx, net_ugx,
+             strftime('%Y-%m-%d %H:%M', recorded_at) AS recorded_at
       FROM revenue_events
-      WHERE recorded_at >= datetime('now', '+3 hours', '-${days} days')
+      WHERE recorded_at >= ? AND recorded_at < ?
       ORDER BY recorded_at ASC
-    `).all();
+    `).all(range.start, range.end);
 
     return {
+      range,   // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } — exclusive end
       rows,
       totals: totals || { gross:0, net:0, count:0, mm_net:0, v_net:0 },
       events,
     };
+  },
+
+  // ── Monthly revenue series (for the trend chart) ──────────────────────────
+  // Returns the last `months` calendar months, oldest → newest, one entry
+  // per month with zero-filled gaps so the chart always has a continuous
+  // timeline even for months with no sales.
+  getMonthlyRevenue(months) {
+    const n = Math.max(1, Math.min(parseInt(months) || 12, 60));
+
+    // "Now" shifted into EAT so month boundaries line up with the rest of
+    // the app's timestamps; read back with UTC getters since we already
+    // did the +3h shift by hand (avoids double-applying the server's own
+    // local timezone on top).
+    const nowEAT = new Date(Date.now() + 3 * 3600 * 1000);
+    const y = nowEAT.getUTCFullYear();
+    const m = nowEAT.getUTCMonth(); // 0-indexed current month
+
+    const monthKeys = [];
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(y, m - i, 1));
+      monthKeys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+    }
+
+    const rows = db.prepare(`
+      SELECT
+        strftime('%Y-%m', recorded_at) AS month,
+        SUM(gross_ugx) AS gross,
+        SUM(net_ugx)   AS net,
+        COUNT(*)       AS count
+      FROM revenue_events
+      WHERE recorded_at >= ?
+      GROUP BY month
+    `).all(`${monthKeys[0]}-01`);
+
+    const byMonth = {};
+    rows.forEach(r => { byMonth[r.month] = r; });
+
+    return monthKeys.map(key => ({
+      month: key, // 'YYYY-MM'
+      gross: byMonth[key] ? byMonth[key].gross : 0,
+      net:   byMonth[key] ? byMonth[key].net   : 0,
+      count: byMonth[key] ? byMonth[key].count : 0,
+    }));
   },
 };

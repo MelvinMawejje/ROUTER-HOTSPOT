@@ -130,15 +130,19 @@ app.post('/api/voucher/redeem', (req, res) => {
   if (db.isVoucherActiveElsewhere(code, mac))
     return res.status(409).json({ success: false, message: 'This voucher is already connected on another device. Please disconnect it there first, then try again here.' });
 
-  // Record revenue on first use — wrapped in try/catch so a DB hiccup
-  // never prevents the user from logging in
-  if (!voucher.first_used_at) {
-    try {
-      const source = code.startsWith('PAY') ? 'mobile_money' : 'voucher';
-      db.recordRevenue(code, voucher.profile, source);
-    } catch (e) {
-      console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
-    }
+  // Record revenue exactly once per voucher — wrapped in try/catch so a DB
+  // hiccup never prevents the user from logging in. We used to gate this on
+  // `!voucher.first_used_at`, but that column is only set later by RADIUS
+  // Accounting-Start (radius-server.js), not by this endpoint. If the user
+  // redeemed more than once before that landed — reload, flaky captive
+  // portal, retyping the code — revenue got recorded again each time.
+  // tryRecordRevenue() claims the voucher atomically, so it's safe to call
+  // on every redemption attempt no matter how many times it's retried.
+  try {
+    const source = code.startsWith('PAY') ? 'mobile_money' : 'voucher';
+    db.tryRecordRevenue(code, voucher.profile, source);
+  } catch (e) {
+    console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
   }
 
   res.json({
@@ -262,11 +266,24 @@ function createVoucherForPayment(phone, packageId, internalTransactionId, vendor
   // Generate PAY + 8 alphanumeric chars, no hyphens (e.g. PAY3F7K9XZ)
   // Same charset as admin vouchers — no ambiguous chars (0/O/1/I/L)
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let voucherCode = 'PAY';
-  for (let i = 0; i < 8; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
 
-  // Register in our database — RADIUS handles authentication from here
-  db.createVoucher(voucherCode, packageId);
+  // Register in our database — RADIUS handles authentication from here.
+  // db.createVoucher() returns false if the random code collided with one
+  // that already exists (INSERT OR IGNORE silently no-op'd). With 32^8
+  // combinations a collision is astronomically unlikely, but if it ever
+  // happened without this check we'd hand the customer someone else's
+  // existing voucher, reassign that voucher's transaction_id, and
+  // double-record revenue on it — so retry with a fresh code instead of
+  // proceeding. Mirrors the retry loop the admin bulk-generator already uses.
+  let voucherCode, created = false;
+  for (let attempt = 0; attempt < 5 && !created; attempt++) {
+    voucherCode = 'PAY';
+    for (let i = 0; i < 8; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
+    created = db.createVoucher(voucherCode, packageId);
+  }
+  if (!created) {
+    throw new Error(`Failed to generate a unique voucher code after 5 attempts (package: ${packageId})`);
+  }
 
   // Mobile-money vouchers are delivered digitally and never physically
   // printed — mark printed_at immediately so they don't clutter the admin
@@ -291,7 +308,7 @@ function createVoucherForPayment(phone, packageId, internalTransactionId, vendor
 
   // Record revenue (96% net for mobile money) — non-fatal if DB not ready
   try {
-    db.recordRevenue(voucherCode, packageId, 'mobile_money');
+    db.tryRecordRevenue(voucherCode, packageId, 'mobile_money');
   } catch (e) {
     console.error('[revenue] recordRevenue failed (non-fatal):', e.message);
   }
@@ -672,23 +689,17 @@ app.get('/api/admin/verify-pin', (req, res) => {
 });
 
 app.get('/api/admin/metrics', (req, res) => {
-  const period  = req.query.period || 'month';
-  const data    = db.getMetrics(period);
+  const period = req.query.period || 'month';
+  const offset = parseInt(req.query.offset) || 0;
+  // db.getMetrics() already returns calendar-aligned rows/totals/events for
+  // the requested period+offset — no need for a second ad-hoc query here
+  // (the old version below duplicated this with a rolling "last N days"
+  // window that disagreed with the calendar-aligned one above it).
+  res.json(db.getMetrics(period, offset));
+});
 
-  // Also return individual events for transaction-level filtering
-  const cutoffs = { day: 1, week: 7, month: 30, year: 365 };
-  const days    = cutoffs[period] || 30;
-  const Database = require('better-sqlite3');
-  const path     = require('path');
-  const adminDb  = new Database(path.join(__dirname, 'mbuya.db'));
-  const events   = adminDb.prepare(`
-    SELECT id, code, profile, source, gross_ugx, net_ugx,
-           strftime('%Y-%m-%d %H:%M', recorded_at) AS recorded_at
-    FROM revenue_events
-    WHERE recorded_at >= datetime('now', '-${days} days')
-    ORDER BY recorded_at DESC
-    LIMIT 1000
-  `).all();
-
-  res.json({ ...data, events });
+// ── Monthly revenue trend (for the dashboard chart) ───────────────────────
+app.get('/api/admin/metrics/monthly', (req, res) => {
+  const months = parseInt(req.query.months) || 12;
+  res.json({ months: db.getMonthlyRevenue(months) });
 });

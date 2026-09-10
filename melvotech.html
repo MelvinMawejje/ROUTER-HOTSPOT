@@ -72,6 +72,9 @@ tr:hover td{background:rgba(0,198,178,.03)}
 .period-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
 .period-tab{background:var(--input-bg);border:1.5px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 16px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.06em;transition:all .2s}
 .period-tab.active{background:rgba(0,198,178,.12);border-color:var(--teal);color:var(--teal)}
+.period-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:20px}
+.period-nav-label{font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:var(--white);min-width:160px;text-align:center}
+.period-nav .btn:disabled{opacity:.35;cursor:not-allowed}
 .rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
 .rev-card{background:var(--input-bg);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
 .rev-card .rc-val{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;color:var(--teal)}
@@ -85,6 +88,11 @@ tr:hover td{background:rgba(0,198,178,.03)}
 .cal-cell[data-v]:hover::after{content:attr(data-v);position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#0d1f3c;border:1px solid var(--border);color:var(--white);font-size:.7rem;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:20}
 .cal-month-labels{display:flex;gap:3px;margin-bottom:4px;min-width:fit-content}
 .cal-month-lbl{font-size:.62rem;color:var(--muted);font-family:'Syne',sans-serif}
+/* Monthly revenue chart */
+.chart-wrap{background:var(--input-bg);border:1px solid var(--border);border-radius:12px;padding:12px 8px}
+#monthlyChart{width:100%;height:auto;display:block}
+.chart-pt{cursor:pointer}
+.chart-pt:hover circle{r:5}
 @media print {
   body {
     background: #fff !important;
@@ -218,6 +226,13 @@ tr:hover td{background:rgba(0,198,178,.03)}
         <button class="period-tab" onclick="switchPeriod('year',this)">This Year</button>
       </div>
 
+      <!-- Period navigation — step backward/forward through history -->
+      <div class="period-nav">
+        <button class="btn btn-sm btn-outline" id="periodPrevBtn" onclick="navigatePeriod(1)" style="margin:0">‹ Prev</button>
+        <div class="period-nav-label" id="periodLabel">—</div>
+        <button class="btn btn-sm btn-outline" id="periodNextBtn" onclick="navigatePeriod(-1)" style="margin:0" disabled>Next ›</button>
+      </div>
+
       <!-- Summary cards (PIN-locked) -->
       <div class="rev-lock-wrap">
         <div class="rev-grid">
@@ -291,6 +306,14 @@ tr:hover td{background:rgba(0,198,178,.03)}
           </table>
         </div>
         <div class="tx-footer" id="dayTxFooter"></div>
+      </div>
+
+      <!-- Monthly revenue trend — independent of the period tabs above -->
+      <div id="monthlyChartSection" style="margin-top:24px">
+        <div class="card-title" style="margin-bottom:10px">Monthly Revenue Trend</div>
+        <div class="chart-wrap">
+          <svg id="monthlyChart" viewBox="0 0 640 220" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
       </div>
 
     </div>
@@ -592,11 +615,13 @@ function fmtDur(str) {
 // ── Metrics ───────────────────────────────────────────────────────────────────
 var metricsPinOk  = false;
 var currentPeriod = 'day';
+var currentOffset = 0;
 
 function openMetrics() {
   document.getElementById('metricsModal').classList.add('open');
   updateRevLockUI();
-  loadMetrics(currentPeriod);
+  loadMetrics(currentPeriod, currentOffset);
+  loadMonthlyChart();
 }
 
 function closeMetrics() {
@@ -644,16 +669,25 @@ function updateRevLockUI() {
 
 function switchPeriod(period, btn) {
   currentPeriod = period;
+  currentOffset = 0; // always land on the current period when switching tabs
   document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  loadMetrics(period);
+  loadMetrics(period, currentOffset);
 }
 
-async function loadMetrics(period) {
+// Step backward (delta=1) or forward (delta=-1) through history for the
+// currently selected period. Can't go past the current period into the
+// future — offset is clamped at 0.
+function navigatePeriod(delta) {
+  currentOffset = Math.max(0, currentOffset + delta);
+  loadMetrics(currentPeriod, currentOffset);
+}
+
+async function loadMetrics(period, offset) {
   try {
-    const r    = await fetch(`${API}/api/admin/metrics?period=${period}`);
+    const r    = await fetch(`${API}/api/admin/metrics?period=${period}&offset=${offset || 0}`);
     const data = await r.json();
-    renderMetrics(data, period);
+    renderMetrics(data, period, offset || 0);
   } catch(e) {
     console.error('Metrics error:', e);
   }
@@ -682,24 +716,57 @@ function updateSummaryCards(events) {
   document.getElementById('mVNet').textContent       = ugx(vNet);
 }
 
-function renderMetrics(data, period) {
+function renderMetrics(data, period, offset) {
   currentTotals = data.totals || {};
   allEvents     = data.events || [];
+
+  document.getElementById('periodLabel').textContent = formatPeriodLabel(period, data.range, offset);
+  document.getElementById('periodNextBtn').disabled   = (offset === 0);
 
   // Summary cards show the full period by default
   updateSummaryCards(allEvents);
 
   if (period === 'day') {
-    // Today: hide calendar, show today's transactions directly
+    // Single day: hide calendar, show that day's transactions directly.
+    // data.range.start IS the selected day (today when offset=0, otherwise
+    // however many days back the Prev button has stepped).
     document.getElementById('calSection').style.display  = 'none';
-    const today = new Date().toISOString().slice(0, 10);
-    showDayTransactions(today, 'Today');
+    const label = offset === 0 ? 'Today' : formatDateLabel(data.range.start);
+    showDayTransactions(data.range.start, label);
   } else {
     // Week/Month/Year: show calendar, hide transactions until a date is clicked
     document.getElementById('calSection').style.display  = '';
     document.getElementById('dayTxPanel').style.display  = 'none';
-    renderCalendar(data.rows || [], period);
+    renderCalendar(data.rows || [], data.range);
   }
+}
+
+// Human-readable label for the currently selected period/offset, built
+// from the calendar-aligned range the backend returned (range.end is
+// exclusive, so the last day shown is range.end minus one day).
+function formatPeriodLabel(period, range, offset) {
+  if (!range) return '—';
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const start = new Date(range.start + 'T00:00:00');
+
+  if (period === 'day') {
+    return offset === 0 ? 'Today' : formatDateLabel(range.start);
+  }
+  if (period === 'week') {
+    const endIncl = new Date(range.end + 'T00:00:00');
+    endIncl.setDate(endIncl.getDate() - 1);
+    const sameMonth = start.getMonth() === endIncl.getMonth();
+    const startStr  = `${months[start.getMonth()].slice(0,3)} ${start.getDate()}`;
+    const endStr    = sameMonth
+      ? `${endIncl.getDate()}, ${endIncl.getFullYear()}`
+      : `${months[endIncl.getMonth()].slice(0,3)} ${endIncl.getDate()}, ${endIncl.getFullYear()}`;
+    return `${startStr} – ${endStr}`;
+  }
+  if (period === 'year') {
+    return `${start.getFullYear()}`;
+  }
+  // month
+  return `${months[start.getMonth()]} ${start.getFullYear()}`;
 }
 
 function filterTx(src, btn) {
@@ -740,20 +807,32 @@ function renderTxTable(events) {
     `${events.length} transaction${events.length !== 1 ? 's' : ''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
 }
 
-function renderCalendar(rows, period) {
+// Local YYYY-MM-DD (avoids the UTC-shift risk of toISOString() when the
+// browser's timezone differs from EAT — matters now that we're walking
+// exact calendar boundaries instead of a rolling day count).
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function renderCalendar(rows, range) {
   // Build a map of day → net revenue
   const dayMap = {};
   rows.forEach(r => { dayMap[r.day] = r.net || 0; });
   const maxVal = Math.max(1, ...Object.values(dayMap));
 
-  // How many days to show
-  const nDays = { day: 1, week: 7, month: 30, year: 365 }[period] || 30;
-  const today = new Date();
-  const days  = [];
-  for (let i = nDays - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+  // Walk every calendar day actually in this period — [range.start, range.end)
+  // — instead of a rolling "last N days from today". This is what makes a
+  // past period (e.g. "Prev" into last month) show that month's own days
+  // rather than always ending at today.
+  const days = [];
+  const cur = new Date(range.start + 'T00:00:00');
+  const end = new Date(range.end   + 'T00:00:00');
+  while (cur < end) {
+    days.push(toDateStr(cur));
+    cur.setDate(cur.getDate() + 1);
   }
 
   // Group into weeks (columns of 7)
@@ -879,6 +958,75 @@ function renderDayTxTable(events) {
   const gross = events.reduce((s, e) => s + (e.gross_ugx  || 0), 0);
   document.getElementById('dayTxFooter').textContent =
     `${events.length} transaction${events.length !== 1 ? 's' : ''} · Gross ${ugx(gross)} · Net ${ugx(net)}`;
+}
+
+// ── Monthly revenue trend chart ─────────────────────────────────────────────
+async function loadMonthlyChart() {
+  try {
+    const r    = await fetch(`${API}/api/admin/metrics/monthly?months=12`);
+    const data = await r.json();
+    renderMonthlyChart(data.months || []);
+  } catch (e) {
+    console.error('Monthly chart error:', e);
+  }
+}
+
+function renderMonthlyChart(months) {
+  const svg = document.getElementById('monthlyChart');
+  if (!months.length) { svg.innerHTML = ''; return; }
+
+  const W = 640, H = 220;
+  const padL = 50, padR = 16, padT = 16, padB = 30;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const maxNet = Math.max(1, ...months.map(m => m.net || 0));
+  const n      = months.length;
+  const stepX  = n > 1 ? plotW / (n - 1) : 0;
+
+  const monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function xLabel(m) {
+    const parts = m.month.split('-');
+    return `${monthAbbr[parseInt(parts[1], 10) - 1]} '${parts[0].slice(2)}`;
+  }
+
+  const points = months.map((m, i) => ({
+    x: padL + i * stepX,
+    y: padT + plotH - (Math.max(0, m.net || 0) / maxNet) * plotH,
+    m,
+  }));
+
+  // Horizontal gridlines + UGX scale labels
+  let grid = '';
+  for (let g = 0; g <= 4; g++) {
+    const y   = padT + (plotH / 4) * g;
+    const val = Math.round(maxNet - (maxNet / 4) * g);
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${(padL+plotW).toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
+    grid += `<text x="${padL-8}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="rgba(255,255,255,.4)" font-family="DM Sans, sans-serif">${Number(val).toLocaleString()}</text>`;
+  }
+
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const areaPath = `M ${points[0].x.toFixed(1)} ${(padT+plotH).toFixed(1)} ` +
+    points.map(p => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') +
+    ` L ${points[points.length-1].x.toFixed(1)} ${(padT+plotH).toFixed(1)} Z`;
+
+  // Thin out x-axis labels if there are a lot of months, so they don't overlap
+  const labelEvery = Math.max(1, Math.ceil(n / 12));
+  let dots = '', labels = '';
+  points.forEach((p, i) => {
+    dots += `<circle class="chart-pt" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="#00c6b2"><title>${xLabel(p.m)}: ${ugx(p.m.net)}</title></circle>`;
+    if (i % labelEvery === 0 || i === points.length - 1) {
+      labels += `<text x="${p.x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)" font-family="DM Sans, sans-serif">${xLabel(p.m)}</text>`;
+    }
+  });
+
+  svg.innerHTML = `
+    ${grid}
+    <path d="${areaPath}" fill="rgba(0,198,178,.12)" stroke="none"/>
+    <path d="${linePath}" fill="none" stroke="#00c6b2" stroke-width="2"/>
+    ${dots}
+    ${labels}
+  `;
 }
 
 // Close modal on backdrop click
