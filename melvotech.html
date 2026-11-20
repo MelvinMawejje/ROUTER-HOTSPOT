@@ -75,7 +75,7 @@ tr:hover td{background:rgba(0,198,178,.03)}
 /* PIN gate — full-screen lock shown before anything else */
 #pinGate{position:fixed;inset:0;z-index:9000;background:var(--navy);display:none;align-items:center;justify-content:center;padding:20px}
 body.locked #pinGate{display:flex}
-body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:none!important}
+body.locked .no-print,body.locked #metricsModal,body.locked #sitesModal,body.locked #printArea{display:none!important}
 .gate-card{background:var(--card-bg);border:1px solid var(--border);border-radius:20px;padding:32px 28px;width:100%;max-width:340px;text-align:center}
 .gate-icon{font-size:2.2rem;margin-bottom:8px}
 .gate-sub{color:var(--muted);font-size:.82rem;margin:4px 0 20px}
@@ -176,6 +176,7 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
     <button class="btn btn-outline btn-sm" onclick="loadAll()">↻ Refresh</button>
     <button class="btn btn-sm btn-teal" style="width:auto;margin-top:0" onclick="printVouchers()">🖨 Print Vouchers</button>
     <button class="btn btn-sm btn-outline" style="margin-top:0;border-color:rgba(255,200,0,.4);color:#ffc800" onclick="openMetrics()">📊 Metrics</button>
+    <button class="btn btn-sm btn-outline" style="margin-top:0" onclick="openSites()">🏢 Sites</button>
     <button class="btn btn-sm btn-outline" style="margin-top:0" onclick="location.reload()">🔒 Lock</button>
   </div>
 </div>
@@ -192,7 +193,6 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
 <!-- Two column layout -->
 <div class="grid" style="grid-template-columns:1fr 1.8fr;align-items:start">
 
-  <div style="display:flex;flex-direction:column;gap:16px">
   <!-- Generate panel -->
   <div class="card">
     <div class="card-title">Generate Vouchers</div>
@@ -220,19 +220,6 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
     <label>Quantity</label>
     <input type="number" id="genQty" value="10" min="1" max="500"/>
     <button class="btn btn-teal" onclick="generateVouchers()">Generate Vouchers</button>
-  </div>
-
-  <!-- Sites panel -->
-  <div class="card">
-    <div class="card-title">Sites</div>
-    <div id="siteList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <input type="text" id="newSiteName" placeholder="New site name" maxlength="40" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter') createSite()"/>
-      <input type="text" id="newSiteCode" placeholder="Letter" maxlength="1" style="width:64px;text-align:center;text-transform:uppercase" onkeydown="if(event.key==='Enter') createSite()"/>
-    </div>
-    <button class="btn btn-teal" style="margin-top:10px" onclick="createSite()">+ Add Site</button>
-    <div class="stat-label" style="margin-top:8px">The letter is circled on every voucher card for that site. Leave it blank to pick one from the name.</div>
-  </div>
   </div>
 
   <!-- Active sessions (replaces the All Vouchers panel as the right column) -->
@@ -372,6 +359,25 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
   </div>
 </div>
 
+<!-- Sites modal -->
+<div class="modal-overlay" id="sitesModal">
+  <div class="metrics-box" style="max-width:480px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--white)">🏢 Sites</div>
+      <button class="btn btn-sm btn-outline" onclick="closeSites()" style="margin-top:0">✕ Close</button>
+    </div>
+    <div id="siteList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
+    <div class="card-title" style="margin:20px 0 10px">Add a site</div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="newSiteName" placeholder="New site name" maxlength="40" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter') createSite()"/>
+      <input type="text" id="newSiteCode" placeholder="Letter" maxlength="1" style="width:64px;text-align:center;text-transform:uppercase" onkeydown="if(event.key==='Enter') createSite()"/>
+    </div>
+    <button class="btn btn-teal" style="margin-top:10px" onclick="createSite()">+ Add Site</button>
+    <div class="stat-label" style="margin-top:10px">The letter is circled on every voucher card for that site. Leave it blank to pick one from the name.</div>
+    <div class="stat-label" style="margin-top:6px">Deactivating a site only stops new vouchers being generated for it. Its existing vouchers, sales history and earnings are all kept.</div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -489,6 +495,10 @@ function renderSiteList() {
     </div>`).join('');
 }
 
+function openSites()  { document.getElementById('sitesModal').classList.add('open'); }
+function closeSites() { document.getElementById('sitesModal').classList.remove('open'); }
+document.getElementById('sitesModal').addEventListener('click', function(e) { if (e.target === this) closeSites(); });
+
 async function createSite() {
   const nameEl = document.getElementById('newSiteName');
   const codeEl = document.getElementById('newSiteCode');
@@ -538,7 +548,7 @@ function renameSite(id) {
 function toggleSite(id) {
   const s = sitesById[id];
   if (!s) return;
-  if (s.active && !confirm(`Deactivate "${s.name}"? You won't be able to generate new vouchers for it, but its history stays.`)) return;
+  if (s.active && !confirm(`Deactivate "${s.name}"?\n\nNo new vouchers can be generated for it. Its existing vouchers, sales history and earnings are NOT deleted.`)) return;
   saveSite(id, { active: !s.active });
 }
 
