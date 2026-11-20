@@ -92,6 +92,98 @@ try { db.exec(`ALTER TABLE vouchers ADD COLUMN active_session_id TEXT`); } catch
 // recordRevenue to fire again on every retry.
 try { db.exec(`ALTER TABLE vouchers ADD COLUMN revenue_recorded_at TEXT`); } catch(e) {}
 
+// ── Sites ─────────────────────────────────────────────────────────────────────
+// A "site" is a location / seller that vouchers are generated for. Every
+// voucher and every revenue event carries a site_id, so earnings can be viewed
+// together or per site. Site 1 ("Central") is seeded and automatically owns
+// every voucher and revenue event that existed before sites were introduced
+// (the ALTER TABLE defaults below stamp them all with site_id = 1).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sites (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    code       TEXT    NOT NULL UNIQUE,
+    active     INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT    DEFAULT (datetime('now', '+3 hours'))
+  )
+`);
+db.prepare(`INSERT OR IGNORE INTO sites (id, name, code) VALUES (1, 'Central', 'C')`).run();
+try { db.exec(`ALTER TABLE vouchers       ADD COLUMN site_id INTEGER NOT NULL DEFAULT 1`); } catch(e) {}
+try { db.exec(`ALTER TABLE revenue_events ADD COLUMN site_id INTEGER NOT NULL DEFAULT 1`); } catch(e) {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_vouchers_site      ON vouchers(site_id)`); } catch(e) {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_revenue_site_time  ON revenue_events(site_id, recorded_at)`); } catch(e) {}
+
+function getSites() {
+  return db.prepare(`
+    SELECT s.id, s.name, s.code, s.active, s.created_at,
+           (SELECT COUNT(*) FROM vouchers v WHERE v.site_id = s.id) AS voucher_count
+    FROM sites s
+    ORDER BY s.id
+  `).all().map(s => ({ ...s, active: s.active === 1 }));
+}
+
+function getSiteById(id) {
+  const s = db.prepare('SELECT id, name, code, active FROM sites WHERE id = ?').get(id);
+  return s ? { ...s, active: s.active === 1 } : null;
+}
+
+// code is the single letter printed (circled) on every voucher card for this
+// site. If none is given, pick the first unused letter from the site's name.
+function createSite(name, code) {
+  const n = String(name || '').trim();
+  if (!n) throw new Error('Site name is required.');
+  if (n.length > 40) throw new Error('Site name is too long (max 40 characters).');
+
+  const used = new Set(db.prepare('SELECT code FROM sites').all().map(r => r.code));
+  let letter = String(code || '').trim().toUpperCase();
+  if (letter) {
+    if (!/^[A-Z]$/.test(letter)) throw new Error('Site letter must be a single letter A–Z.');
+    if (used.has(letter)) throw new Error(`Letter ${letter} is already used by another site.`);
+  } else {
+    const candidates = [...n.toUpperCase().replace(/[^A-Z]/g, ''), ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+    letter = candidates.find(c => !used.has(c));
+    if (!letter) throw new Error('All 26 site letters are already in use.');
+  }
+
+  try {
+    const r = db.prepare('INSERT INTO sites (name, code) VALUES (?, ?)').run(n, letter);
+    return getSiteById(r.lastInsertRowid);
+  } catch (e) {
+    if (/UNIQUE/i.test(e.message)) throw new Error('A site with that name already exists.');
+    throw e;
+  }
+}
+
+// The letter is deliberately NOT editable — it is already printed on cards in
+// people's hands. Only the name and the active flag can change.
+function updateSite(id, fields) {
+  const { name, active } = fields || {};
+  const site = getSiteById(id);
+  if (!site) throw new Error('Site not found.');
+
+  if (name !== undefined) {
+    const n = String(name).trim();
+    if (!n) throw new Error('Site name cannot be empty.');
+    if (n.length > 40) throw new Error('Site name is too long (max 40 characters).');
+    try {
+      db.prepare('UPDATE sites SET name = ? WHERE id = ?').run(n, id);
+    } catch (e) {
+      if (/UNIQUE/i.test(e.message)) throw new Error('A site with that name already exists.');
+      throw e;
+    }
+  }
+
+  if (active !== undefined) {
+    const on = active ? 1 : 0;
+    if (!on) {
+      const others = db.prepare('SELECT COUNT(*) AS n FROM sites WHERE active = 1 AND id != ?').get(id).n;
+      if (others === 0) throw new Error('At least one site must stay active.');
+    }
+    db.prepare('UPDATE sites SET active = ? WHERE id = ?').run(on, id);
+  }
+  return getSiteById(id);
+}
+
 const PROFILE_SECONDS = {
   'mini-day': 14400,
   '1day':     86400,
@@ -102,6 +194,12 @@ const PROFILE_SECONDS = {
 module.exports = {
   PROFILE_SECONDS,
 
+  // ── Sites ─────────────────────────────────────────────────────────────────
+  getSites,
+  getSite: getSiteById,
+  createSite,
+  updateSite,
+
   // ── Create voucher (admin generate or payment) ────────────────────────────
   // Returns true if a NEW row was actually inserted, false if `code` already
   // existed (INSERT OR IGNORE silently no-op'd). Callers that generate a
@@ -109,13 +207,15 @@ module.exports = {
   // carry on as if they'd created a fresh voucher when they actually just
   // collided with an existing one (wrong profile/time, revenue mis-recorded
   // against someone else's voucher, transaction_id reassigned, etc).
-  createVoucher(code, profile) {
+  // siteId defaults to 1 (Central) — mobile-money vouchers are created here
+  // without a site, so they land on Central exactly as before.
+  createVoucher(code, profile, siteId = 1) {
     const secs = PROFILE_SECONDS[profile] || 86400;
     const result = db.prepare(`
       INSERT OR IGNORE INTO vouchers
-        (code, profile, allocated_seconds, used_seconds, disabled)
-      VALUES (?, ?, ?, 0, 0)
-    `).run(code, profile, secs);
+        (code, profile, allocated_seconds, used_seconds, disabled, site_id)
+      VALUES (?, ?, ?, 0, 0, ?)
+    `).run(code, profile, secs, siteId);
     return result.changes > 0;
   },
 
@@ -303,10 +403,14 @@ module.exports = {
     const PRICES   = { 'mini-day': 500, '1day': 1000, '1week': 5000, '1month': 20000 };
     const gross    = PRICES[profile] || 0;
     const net      = source === 'mobile_money' ? Math.floor(gross * 0.96) : gross;
+    // Stamp the revenue with the voucher's site so earnings stay attributed to
+    // the site the voucher was generated for, wherever it ends up being used.
+    const v      = db.prepare('SELECT site_id FROM vouchers WHERE code = ?').get(code);
+    const siteId = v ? v.site_id : 1;
     db.prepare(`
-      INSERT INTO revenue_events (code, profile, source, gross_ugx, net_ugx)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(code, profile, source, gross, net);
+      INSERT INTO revenue_events (code, profile, source, gross_ugx, net_ugx, site_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(code, profile, source, gross, net, siteId);
   },
 
   // ── Record revenue exactly once per voucher ───────────────────────────────
@@ -396,7 +500,7 @@ module.exports = {
     `).get(range.start, range.end);
 
     const events = db.prepare(`
-      SELECT code, profile, source, gross_ugx, net_ugx,
+      SELECT code, profile, source, gross_ugx, net_ugx, site_id,
              strftime('%Y-%m-%d %H:%M', recorded_at) AS recorded_at
       FROM revenue_events
       WHERE recorded_at >= ? AND recorded_at < ?
@@ -415,8 +519,10 @@ module.exports = {
   // Returns the last `months` calendar months, oldest → newest, one entry
   // per month with zero-filled gaps so the chart always has a continuous
   // timeline even for months with no sales.
-  getMonthlyRevenue(months) {
-    const n = Math.max(1, Math.min(parseInt(months) || 12, 60));
+  // siteId (optional): limit the series to one site; omit for all sites.
+  getMonthlyRevenue(months, siteId) {
+    const n   = Math.max(1, Math.min(parseInt(months) || 12, 60));
+    const sid = parseInt(siteId) || 0;
 
     // "Now" shifted into EAT so month boundaries line up with the rest of
     // the app's timestamps; read back with UTC getters since we already
@@ -439,9 +545,9 @@ module.exports = {
         SUM(net_ugx)   AS net,
         COUNT(*)       AS count
       FROM revenue_events
-      WHERE recorded_at >= ?
+      WHERE recorded_at >= ? ${sid ? 'AND site_id = ?' : ''}
       GROUP BY month
-    `).all(`${monthKeys[0]}-01`);
+    `).all(...(sid ? [`${monthKeys[0]}-01`, sid] : [`${monthKeys[0]}-01`]));
 
     const byMonth = {};
     rows.forEach(r => { byMonth[r.month] = r; });

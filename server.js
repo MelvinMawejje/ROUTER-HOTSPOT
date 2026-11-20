@@ -520,9 +520,14 @@ app.get('/api/admin/vouchers', (req, res) => {
 
 // ── Generate a batch of vouchers ──────────────────────────────────────────────
 app.post('/api/admin/vouchers/generate', (req, res) => {
-  const { profile, qty, type, length } = req.body;
+  const { profile, qty, type, length, siteId } = req.body;
   const PROFILE_SECONDS = { 'mini-day': 14400, '1day': 86400, '1week': 604800, '1month': 2592000 };
   if (!PROFILE_SECONDS[profile]) return res.status(400).json({ success: false, message: 'Invalid profile.' });
+
+  // Every batch belongs to a site (defaults to 1 = Central when none is sent).
+  const site = db.getSite(parseInt(siteId) || 1);
+  if (!site || !site.active)
+    return res.status(400).json({ success: false, message: 'Pick an active site for these vouchers.' });
 
   const count  = Math.min(parseInt(qty) || 1, 500);
   const secs   = PROFILE_SECONDS[profile];
@@ -545,7 +550,7 @@ app.post('/api/admin/vouchers/generate', (req, res) => {
   const path     = require('path');
   const adminDb  = new Database(path.join(__dirname, 'mbuya.db'));
   const insert   = adminDb.prepare(
-    'INSERT OR IGNORE INTO vouchers (code, profile, allocated_seconds, used_seconds, disabled) VALUES (?, ?, ?, 0, 0)'
+    'INSERT OR IGNORE INTO vouchers (code, profile, allocated_seconds, used_seconds, disabled, site_id) VALUES (?, ?, ?, 0, 0, ?)'
   );
 
   const generated = [];
@@ -554,13 +559,13 @@ app.post('/api/admin/vouchers/generate', (req, res) => {
     while (generated.length < count && attempts < count * 5) {
       attempts++;
       const code = makeCode();
-      const result = insert.run(code, profile, secs);
+      const result = insert.run(code, profile, secs, site.id);
       if (result.changes > 0) generated.push(code); // only add if not duplicate
     }
   });
   insertMany();
 
-  res.json({ success: true, count: generated.length, codes: generated });
+  res.json({ success: true, count: generated.length, codes: generated, site: { id: site.id, name: site.name, code: site.code } });
 });
 
 //______________________seek voucher login code____________________________
@@ -701,5 +706,35 @@ app.get('/api/admin/metrics', (req, res) => {
 // ── Monthly revenue trend (for the dashboard chart) ───────────────────────
 app.get('/api/admin/metrics/monthly', (req, res) => {
   const months = parseInt(req.query.months) || 12;
-  res.json({ months: db.getMonthlyRevenue(months) });
+  res.json({ months: db.getMonthlyRevenue(months, req.query.site) });
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// SITES  —  locations / sellers that vouchers are generated for
+// ════════════════════════════════════════════════════════════════════════════════
+app.get('/api/admin/sites', (req, res) => {
+  res.json({ sites: db.getSites() });
+});
+
+// Body: { name, code? }  — code is the single letter circled on the voucher
+// cards; if omitted, one is picked automatically from the name.
+app.post('/api/admin/sites', (req, res) => {
+  try {
+    const site = db.createSite(req.body.name, req.body.code);
+    res.json({ success: true, site });
+  } catch (e) {
+    res.status(400).json({ success: false, message: e.message });
+  }
+});
+
+// Body: { id, name?, active? }  — the letter can't change once created
+// (it's already printed on cards that are out in the field).
+app.post('/api/admin/sites/update', (req, res) => {
+  try {
+    const { id, name, active } = req.body;
+    const site = db.updateSite(parseInt(id), { name, active });
+    res.json({ success: true, site });
+  } catch (e) {
+    res.status(400).json({ success: false, message: e.message });
+  }
 });

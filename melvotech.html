@@ -46,10 +46,19 @@ tr:hover td{background:rgba(0,198,178,.03)}
 .progress-fill{height:100%;border-radius:4px;background:var(--teal);transition:width .3s}
 /* Print voucher cards */
 .voucher-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:14px}
-.v-card{border:1.5px dashed var(--border);border-radius:10px;padding:14px;text-align:center;background:var(--input-bg)}
+.v-card{position:relative;border:1.5px dashed var(--border);border-radius:10px;padding:14px;text-align:center;background:var(--input-bg)}
 .v-card .vc-title{font-family:'Syne',sans-serif;font-weight:800;font-size:.8rem;color:var(--teal);letter-spacing:.08em;margin-bottom:6px}
 .v-card .vc-code{font-family:monospace;font-size:1rem;color:var(--white);letter-spacing:.12em;word-break:break-all;margin-bottom:6px}
 .v-card .vc-profile{font-size:.72rem;color:var(--muted)}
+/* Site letter, circled at the top-right of every voucher card */
+.v-card .vc-site{position:absolute;top:7px;right:7px;width:24px;height:24px;border:1.5px solid var(--teal);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.78rem;line-height:1;color:var(--teal)}
+/* Sites */
+.site-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--teal);color:var(--teal);font-family:'Syne',sans-serif;font-weight:800;font-size:.65rem;line-height:1;flex-shrink:0}
+.site-badge.lg{width:28px;height:28px;font-size:.8rem}
+.site-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(0,198,178,.08)}
+.site-row:last-child{border-bottom:none}
+.site-pick{cursor:pointer}
+.site-pick.sel td{background:rgba(0,198,178,.12)}
 /* Filters */
 .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
 .filters select,.filters input{width:auto;flex:1;min-width:120px}
@@ -137,6 +146,10 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
   .v-card .vc-profile {
     color: #666 !important;
   }
+  .v-card .vc-site {
+    border-color: #000 !important;
+    color: #000 !important;
+  }
 }
 </style>
 </head>
@@ -158,7 +171,8 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
 <div class="no-print">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px">
   <h1>MBUYA <span>WIFI</span> Admin</h1>
-  <div style="display:flex;gap:8px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select id="siteFilter" onchange="setSiteFilter(this.value)" title="Show one site, or all sites together" style="width:auto;padding:6px 10px;font-size:.78rem"><option value="">All sites</option></select>
     <button class="btn btn-outline btn-sm" onclick="loadAll()">↻ Refresh</button>
     <button class="btn btn-sm btn-teal" style="width:auto;margin-top:0" onclick="printVouchers()">🖨 Print Vouchers</button>
     <button class="btn btn-sm btn-outline" style="margin-top:0;border-color:rgba(255,200,0,.4);color:#ffc800" onclick="openMetrics()">📊 Metrics</button>
@@ -178,9 +192,12 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
 <!-- Two column layout -->
 <div class="grid" style="grid-template-columns:1fr 1.8fr;align-items:start">
 
+  <div style="display:flex;flex-direction:column;gap:16px">
   <!-- Generate panel -->
   <div class="card">
     <div class="card-title">Generate Vouchers</div>
+    <label>Site</label>
+    <select id="genSite"></select>
     <label>Package</label>
     <select id="genProfile">
       <option value="mini-day">4 Hours / Mini-Day (UGX 500)</option>
@@ -203,6 +220,19 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
     <label>Quantity</label>
     <input type="number" id="genQty" value="10" min="1" max="500"/>
     <button class="btn btn-teal" onclick="generateVouchers()">Generate Vouchers</button>
+  </div>
+
+  <!-- Sites panel -->
+  <div class="card">
+    <div class="card-title">Sites</div>
+    <div id="siteList"><div style="color:var(--muted);font-size:.8rem">Loading…</div></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <input type="text" id="newSiteName" placeholder="New site name" maxlength="40" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter') createSite()"/>
+      <input type="text" id="newSiteCode" placeholder="Letter" maxlength="1" style="width:64px;text-align:center;text-transform:uppercase" onkeydown="if(event.key==='Enter') createSite()"/>
+    </div>
+    <button class="btn btn-teal" style="margin-top:10px" onclick="createSite()">+ Add Site</button>
+    <div class="stat-label" style="margin-top:8px">The letter is circled on every voucher card for that site. Leave it blank to pick one from the name.</div>
+  </div>
   </div>
 
   <!-- Active sessions (replaces the All Vouchers panel as the right column) -->
@@ -233,6 +263,12 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
 
     <!-- Metrics content (whole panel is behind the PIN gate) -->
     <div id="metricsContent" style="display:block">
+      <!-- Site filter -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <span style="font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal)">Site</span>
+        <select id="metricsSite" onchange="setSiteFilter(this.value)" style="width:auto;flex:1;max-width:260px;padding:7px 10px;font-size:.82rem"><option value="">All sites</option></select>
+      </div>
+
       <!-- Period tabs -->
       <div class="period-tabs">
         <button class="period-tab active" onclick="switchPeriod('day',this)">Today</button>
@@ -270,6 +306,18 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
           <div class="rc-val" id="mVNet" style="color:#a78bfa">—</div>
           <div class="rc-lbl">Cash Vouchers</div>
         </div>
+      </div>
+
+      <!-- Earnings by site: all sites side by side for the selected period / day -->
+      <div id="siteBreakdown" style="margin-bottom:24px">
+        <div class="card-title" style="margin-bottom:10px" id="siteBreakdownTitle">Earnings by Site</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Site</th><th>Sold</th><th>Cash</th><th>Mobile</th><th>Net</th></tr></thead>
+            <tbody id="siteBreakdownBody"></tbody>
+          </table>
+        </div>
+        <div class="stat-label" style="margin-top:6px">Click a site to view only that site.</div>
       </div>
 
       <!-- Calendar heatmap -->
@@ -329,10 +377,174 @@ body.locked .no-print,body.locked #metricsModal,body.locked #printArea{display:n
 <script>
 const API = '';  // same origin
 
-var allVouchers = [];
+var allVouchers   = [];
+var voucherByCode = {};   // code        → voucher   (to tell which site a live session belongs to)
+var voucherByMac  = {};   // active_mac  → voucher
+var sites         = [];
+var sitesById     = {};
+var currentSite   = '';   // '' = all sites, otherwise a site id as a string
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function siteLetter(id) { const s = sitesById[id]; return s ? s.code : '?'; }
+function siteName(id)   { const s = sitesById[id]; return s ? s.name : 'Unknown site'; }
+function siteBadge(id, large) {
+  return `<span class="site-badge${large ? ' lg' : ''}" title="${esc(siteName(id))}">${esc(siteLetter(id))}</span>`;
+}
+function siteVouchers() {
+  return currentSite ? allVouchers.filter(v => String(v.site_id) === currentSite) : allVouchers;
+}
+
+// Which site does a live MikroTik session belong to? Its user is the voucher
+// code (or the device MAC on an automatic reconnect), so look the voucher up.
+function siteIdOfSession(s) {
+  const u = String(s.user || '');
+  let v = voucherByCode[u] || voucherByCode[u.toUpperCase()];
+  if (!v) {
+    const mac = String(s['mac-address'] || '').toUpperCase();
+    v = voucherByMac[mac] || voucherByMac[u.toUpperCase()];
+  }
+  return v ? v.site_id : 1;
+}
+function visibleSessions() {
+  return currentSite ? allSessions.filter(s => String(siteIdOfSession(s)) === currentSite) : allSessions;
+}
+function refreshActiveStat() {
+  document.getElementById('statActive').textContent = visibleSessions().length;
+}
+
+// Re-render everything that depends on the site filter
+function refreshViews() {
+  const rows = siteVouchers();
+  renderStats(rows);
+  renderTable(rows);
+  renderPrintCards(rows);
+  renderSessionPage();
+  refreshActiveStat();
+}
+
+function setSiteFilter(val) {
+  currentSite = String(val || '');
+  ['siteFilter', 'metricsSite'].forEach(id => { const el = document.getElementById(id); if (el) el.value = currentSite; });
+  const gen = document.getElementById('genSite');
+  if (gen && currentSite && sitesById[currentSite] && sitesById[currentSite].active) gen.value = currentSite;
+  sessionPage = 0;
+  refreshViews();
+  if (document.getElementById('metricsModal').classList.contains('open')) {
+    if (lastMetrics) renderMetrics(lastMetrics, currentPeriod, currentOffset);
+    loadMonthlyChart();
+  }
+}
+
+// ── Sites ─────────────────────────────────────────────────────────────────────
+async function loadSites() {
+  try {
+    const r    = await fetch(API + '/api/admin/sites');
+    const data = await r.json();
+    sites     = data.sites || [];
+    sitesById = {};
+    sites.forEach(s => { sitesById[s.id] = s; });
+    if (currentSite && !sitesById[currentSite]) currentSite = '';
+    renderSiteList();
+    populateSiteSelects();
+  } catch (e) {
+    console.error('Sites error:', e);
+  }
+}
+
+function populateSiteSelects() {
+  const filterHtml = '<option value="">All sites</option>' + sites.map(s =>
+    `<option value="${s.id}">${esc(s.code)} · ${esc(s.name)}${s.active ? '' : ' (inactive)'}</option>`).join('');
+  ['siteFilter', 'metricsSite'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.innerHTML = filterHtml; el.value = currentSite; }
+  });
+
+  // Generate dropdown: active sites only. Keep the admin's current choice;
+  // otherwise follow the site filter; otherwise the first active site.
+  const gen = document.getElementById('genSite');
+  if (gen) {
+    const prev = gen.value;
+    gen.innerHTML = sites.filter(s => s.active).map(s =>
+      `<option value="${s.id}">${esc(s.code)} · ${esc(s.name)}</option>`).join('');
+    const has = v => v && [...gen.options].some(o => o.value === String(v));
+    if (has(prev)) gen.value = prev;
+    else if (has(currentSite)) gen.value = currentSite;
+  }
+}
+
+function renderSiteList() {
+  const el = document.getElementById('siteList');
+  if (!el) return;
+  el.innerHTML = sites.map(s => `
+    <div class="site-row">
+      ${siteBadge(s.id, true)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.88rem;${s.active ? '' : 'opacity:.5'}">${esc(s.name)}</div>
+        <div style="font-size:.7rem;color:var(--muted)">${s.voucher_count} voucher${s.voucher_count === 1 ? '' : 's'}</div>
+      </div>
+      <button class="btn btn-sm btn-outline" style="margin:0" onclick="renameSite(${s.id})" title="Rename">✎</button>
+      <button class="btn btn-sm btn-outline" style="margin:0${s.active ? ';color:var(--teal);border-color:var(--teal)' : ''}" onclick="toggleSite(${s.id})" title="${s.active ? 'Click to deactivate' : 'Click to activate'}">${s.active ? 'Active' : 'Inactive'}</button>
+    </div>`).join('');
+}
+
+async function createSite() {
+  const nameEl = document.getElementById('newSiteName');
+  const codeEl = document.getElementById('newSiteCode');
+  const name   = nameEl.value.trim();
+  if (!name) { showToast('❌ Enter a site name'); return; }
+  try {
+    const r    = await fetch(API + '/api/admin/sites', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, code: codeEl.value.trim() }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      nameEl.value = ''; codeEl.value = '';
+      showToast(`✅ Site "${data.site.name}" added — letter ${data.site.code}`);
+      await loadSites();
+    } else {
+      showToast('❌ ' + (data.message || 'Could not add site'));
+    }
+  } catch (e) {
+    showToast('❌ Network error');
+  }
+}
+
+async function saveSite(id, fields) {
+  try {
+    const r    = await fetch(API + '/api/admin/sites/update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...fields }),
+    });
+    const data = await r.json();
+    if (!data.success) { showToast('❌ ' + (data.message || 'Could not update site')); return; }
+    await loadSites();
+    refreshViews();
+  } catch (e) {
+    showToast('❌ Network error');
+  }
+}
+
+function renameSite(id) {
+  const s = sitesById[id];
+  if (!s) return;
+  const name = prompt(`Rename site "${s.name}" to:`, s.name);
+  if (name === null || !name.trim() || name.trim() === s.name) return;
+  saveSite(id, { name: name.trim() });
+}
+
+function toggleSite(id) {
+  const s = sitesById[id];
+  if (!s) return;
+  if (s.active && !confirm(`Deactivate "${s.name}"? You won't be able to generate new vouchers for it, but its history stays.`)) return;
+  saveSite(id, { active: !s.active });
+}
 
 // ── Load everything on start ──────────────────────────────────────────────────
 async function loadAll() {
+  await loadSites();   // site names/letters first, so badges render correctly
   await Promise.all([loadVouchers(), loadSessions()]);
 }
 
@@ -342,9 +554,12 @@ async function loadVouchers() {
     const r    = await fetch(API + '/api/admin/vouchers');
     const data = await r.json();
     allVouchers = data.vouchers || [];
-    renderStats(allVouchers);
-    renderTable(allVouchers);
-    renderPrintCards(allVouchers);
+    voucherByCode = {}; voucherByMac = {};
+    allVouchers.forEach(v => {
+      voucherByCode[v.code] = v;
+      if (v.active_mac) voucherByMac[String(v.active_mac).toUpperCase()] = v;
+    });
+    refreshViews();   // stats, table, print cards and live sessions — all filtered by site
   } catch(e) {
     console.error(e);
   }
@@ -431,6 +646,7 @@ function renderPrintCards(rows) {
 
   document.getElementById('printArea').innerHTML = printable.map(v => `
     <div class="v-card">
+      <div class="vc-site" title="${esc(siteName(v.site_id))}">${esc(siteLetter(v.site_id))}</div>
       <div class="vc-title">🌐 MBUYA WIFI</div>
       <div class="vc-code">${v.code}</div>
       <div class="vc-profile">${profileLabel[v.profile] || v.profile}</div>
@@ -486,11 +702,11 @@ async function loadSessions() {
     const r    = await fetch(API + '/api/admin/sessions');
     const data = await r.json();
     allSessions = data.sessions || [];
-    document.getElementById('statActive').textContent = allSessions.length;
+    refreshActiveStat();
 
     // Don't strand the admin on a page that no longer exists once
     // sessions drop off (e.g. someone disconnects)
-    const maxPage = Math.max(0, Math.ceil(allSessions.length / SESSIONS_PAGE_SIZE) - 1);
+    const maxPage = Math.max(0, Math.ceil(visibleSessions().length / SESSIONS_PAGE_SIZE) - 1);
     if (sessionPage > maxPage) sessionPage = maxPage;
 
     renderSessionPage();
@@ -502,28 +718,29 @@ async function loadSessions() {
 function renderSessionPage() {
   const tbody = document.getElementById('sessionTable');
   const pager = document.getElementById('sessionPager');
+  const list  = visibleSessions();
 
-  if (!allSessions.length) {
+  if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No active sessions</td></tr>';
     pager.innerHTML = '';
     return;
   }
 
   const start    = sessionPage * SESSIONS_PAGE_SIZE;
-  const pageRows = allSessions.slice(start, start + SESSIONS_PAGE_SIZE);
+  const pageRows = list.slice(start, start + SESSIONS_PAGE_SIZE);
 
   tbody.innerHTML = pageRows.map(s => `<tr>
-    <td style="font-family:monospace;font-size:.8rem;color:var(--teal)">${s.user}</td>
+    <td style="font-family:monospace;font-size:.8rem;color:var(--teal)"><span style="display:inline-flex;align-items:center;gap:8px">${siteBadge(siteIdOfSession(s))}${esc(s.user)}</span></td>
     <td>${fmtDur(s.uptime)}</td>
     <td>${s['session-time-left'] ? fmtDur(s['session-time-left']) : '∞'}</td>
     <td style="color:var(--muted);font-size:.78rem">${s.address || '—'}</td>
     <td><button class="btn btn-sm btn-danger" onclick="kickSession('${s.user}')">Kick</button></td>
   </tr>`).join('');
 
-  const totalPages = Math.ceil(allSessions.length / SESSIONS_PAGE_SIZE);
+  const totalPages = Math.ceil(list.length / SESSIONS_PAGE_SIZE);
   pager.innerHTML = totalPages <= 1 ? '' : `
     <button class="btn btn-sm btn-outline" style="width:auto" onclick="changeSessionPage(-1)" ${sessionPage === 0 ? 'disabled' : ''}>← Prev</button>
-    <span>Page ${sessionPage + 1} of ${totalPages} (${allSessions.length} total)</span>
+    <span>Page ${sessionPage + 1} of ${totalPages} (${list.length} total)</span>
     <button class="btn btn-sm btn-outline" style="width:auto" onclick="changeSessionPage(1)" ${sessionPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
   `;
 }
@@ -539,6 +756,7 @@ async function generateVouchers() {
   const type    = document.getElementById('genType').value;
   const length  = parseInt(document.getElementById('genLength').value);
   const qty     = parseInt(document.getElementById('genQty').value) || 1;
+  const siteId  = parseInt(document.getElementById('genSite').value) || 1;
   const btn     = event.target;
   btn.disabled  = true; btn.textContent = 'Generating…';
 
@@ -546,12 +764,15 @@ async function generateVouchers() {
     const r    = await fetch(API + '/api/admin/vouchers/generate', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ profile, qty, type, length }),
+      body:    JSON.stringify({ profile, qty, type, length, siteId }),
     });
     const data = await r.json();
     if (data.success) {
-      showToast(`✅ ${data.count} vouchers created`);
+      showToast(`✅ ${data.count} vouchers created for ${data.site.name} (${data.site.code})`);
       await loadAll();
+      // If the view is limited to another site, jump to this one so the new
+      // cards are visible and ready to print.
+      if (currentSite && currentSite !== String(data.site.id)) setSiteFilter(String(data.site.id));
     } else {
       showToast('❌ ' + (data.message || 'Error'));
     }
@@ -656,7 +877,9 @@ async function loadMetrics(period, offset) {
   }
 }
 
-var allEvents    = [];
+var rawEvents    = [];   // every event for the period, all sites
+var allEvents    = [];   // the same events narrowed to the selected site
+var lastMetrics  = null;
 var currentSrc   = 'all';
 var currentTotals = {};  // stores full-period totals so we can reset cards after closing a day view
 
@@ -679,9 +902,69 @@ function updateSummaryCards(events) {
   document.getElementById('mVNet').textContent       = ugx(vNet);
 }
 
+// Daily net revenue per day, built from the (site-filtered) events — drives the calendar heatmap
+function rowsFromEvents(events) {
+  const m = {};
+  events.forEach(e => {
+    const d = (e.recorded_at || '').slice(0, 10);
+    if (d) m[d] = (m[d] || 0) + (e.net_ugx || 0);
+  });
+  return Object.keys(m).map(d => ({ day: d, net: m[d] }));
+}
+
+// All sites side by side for the selected period — or for the clicked day.
+// Always shows every site (that is the comparison view); the selected site is
+// highlighted, and clicking a row narrows the whole panel to that site.
+function renderSiteBreakdown() {
+  const body = document.getElementById('siteBreakdownBody');
+  if (!body) return;
+  const scope = selectedDay
+    ? rawEvents.filter(e => e.recorded_at && e.recorded_at.startsWith(selectedDay))
+    : rawEvents;
+
+  const by = {};
+  sites.forEach(s => { by[s.id] = { id: s.id, active: s.active, count: 0, cash: 0, mm: 0, net: 0 }; });
+  scope.forEach(e => {
+    const id  = e.site_id || 1;
+    const row = by[id] || (by[id] = { id, active: false, count: 0, cash: 0, mm: 0, net: 0 });
+    const net = e.net_ugx || 0;
+    row.count++; row.net += net;
+    if (e.source === 'mobile_money') row.mm += net; else row.cash += net;
+  });
+
+  const rows = Object.values(by).filter(r => r.active || r.count > 0).sort((a, b) => a.id - b.id);
+  const tot  = rows.reduce((t, r) => ({ count: t.count + r.count, cash: t.cash + r.cash, mm: t.mm + r.mm, net: t.net + r.net }),
+                           { count: 0, cash: 0, mm: 0, net: 0 });
+
+  body.innerHTML = rows.map(r => `
+    <tr class="site-pick${currentSite === String(r.id) ? ' sel' : ''}" onclick="pickSite(${r.id})" title="Click to view only this site">
+      <td><span style="display:inline-flex;align-items:center;gap:8px">${siteBadge(r.id)}${esc(siteName(r.id))}</span></td>
+      <td>${r.count}</td>
+      <td style="color:#a78bfa">${ugx(r.cash)}</td>
+      <td style="color:#ffc800">${ugx(r.mm)}</td>
+      <td style="color:var(--teal);font-weight:600">${ugx(r.net)}</td>
+    </tr>`).join('') + `
+    <tr>
+      <td style="font-weight:700">Total</td>
+      <td style="font-weight:700">${tot.count}</td>
+      <td style="font-weight:700;color:#a78bfa">${ugx(tot.cash)}</td>
+      <td style="font-weight:700;color:#ffc800">${ugx(tot.mm)}</td>
+      <td style="font-weight:700;color:var(--teal)">${ugx(tot.net)}</td>
+    </tr>`;
+
+  const periodText = selectedDay ? selectedDayLabel : (document.getElementById('periodLabel').textContent || '');
+  document.getElementById('siteBreakdownTitle').textContent = 'Earnings by Site' + (periodText && periodText !== '—' ? ' · ' + periodText : '');
+}
+
+function pickSite(id) {
+  setSiteFilter(currentSite === String(id) ? '' : String(id));
+}
+
 function renderMetrics(data, period, offset) {
+  lastMetrics   = data;
   currentTotals = data.totals || {};
-  allEvents     = data.events || [];
+  rawEvents     = data.events || [];
+  allEvents     = currentSite ? rawEvents.filter(e => String(e.site_id || 1) === currentSite) : rawEvents;
 
   document.getElementById('periodLabel').textContent = formatPeriodLabel(period, data.range, offset);
   document.getElementById('periodNextBtn').disabled   = (offset === 0);
@@ -700,7 +983,9 @@ function renderMetrics(data, period, offset) {
     // Week/Month/Year: show calendar, hide transactions until a date is clicked
     document.getElementById('calSection').style.display  = '';
     document.getElementById('dayTxPanel').style.display  = 'none';
-    renderCalendar(data.rows || [], data.range);
+    renderCalendar(rowsFromEvents(allEvents), data.range);
+    selectedDay = null;
+    renderSiteBreakdown();
   }
 }
 
@@ -760,7 +1045,7 @@ function renderTxTable(events) {
       : '<span class="badge" style="background:rgba(167,139,250,.12);color:#a78bfa">🎟 Cash</span>';
     return `<tr>
       <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${e.recorded_at}</td>
-      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)">${e.code}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)"><span style="display:inline-flex;align-items:center;gap:7px">${siteBadge(e.site_id || 1)}${e.code}</span></td>
       <td>${profileLabel[e.profile] || e.profile}</td>
       <td>${badge}</td>
       <td style="color:var(--muted);font-size:.8rem">${ugx(e.gross_ugx)}</td>
@@ -855,6 +1140,7 @@ function formatDateLabel(dateStr) {
 
 var dayEvents   = [];
 var selectedDay = null;
+var selectedDayLabel = '';
 
 function onCalClick(date) {
   document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
@@ -872,6 +1158,8 @@ function showDayTransactions(date, label) {
   updateSummaryCards(dayEvents);
 
   const title = label || formatDateLabel(date);
+  selectedDayLabel = title;
+  renderSiteBreakdown();
   document.getElementById('dayTxTitle').textContent  = 'Transactions · ' + title;
   document.getElementById('dayTxPanel').style.display = '';
 
@@ -890,6 +1178,7 @@ function closeDayTx() {
   selectedDay = null;
   // Reset summary cards to the full period totals
   updateSummaryCards(allEvents);
+  renderSiteBreakdown();
 }
 
 function filterDayTx(src, btn) {
@@ -915,7 +1204,7 @@ function renderDayTxTable(events) {
     const time  = e.recorded_at ? e.recorded_at.slice(11, 16) : '—';
     return `<tr>
       <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${time}</td>
-      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)">${e.code}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--teal)"><span style="display:inline-flex;align-items:center;gap:7px">${siteBadge(e.site_id || 1)}${e.code}</span></td>
       <td>${pLabel[e.profile] || e.profile}</td>
       <td>${badge}</td>
       <td style="color:var(--muted);font-size:.8rem">${ugx(e.gross_ugx)}</td>
@@ -931,7 +1220,7 @@ function renderDayTxTable(events) {
 // ── Monthly revenue trend chart ─────────────────────────────────────────────
 async function loadMonthlyChart() {
   try {
-    const r    = await fetch(`${API}/api/admin/metrics/monthly?months=12`);
+    const r    = await fetch(`${API}/api/admin/metrics/monthly?months=12${currentSite ? '&site=' + encodeURIComponent(currentSite) : ''}`);
     const data = await r.json();
     renderMonthlyChart(data.months || []);
   } catch (e) {
